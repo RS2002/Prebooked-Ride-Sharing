@@ -1,1 +1,1 @@
-# D3QN
+# D3QN: Double Double DQN
