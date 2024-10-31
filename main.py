@@ -11,20 +11,20 @@ def get_args():
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('--batch_size', type=int, default=512)
-    parser.add_argument('--train_times', type=int, default=30)
+    parser.add_argument('--train_times', type=int, default=20)
     parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=500)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=30000)
+    parser.add_argument('--buffer_capacity', type=int, default=10000)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_sample_rate', type=float, default=0.20)
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,2.0,4.0])
-    parser.add_argument('--punishment', type=float, default=3.0)
+    parser.add_argument('--punishment', type=float, default=10.0)
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--arl", action="store_true",default=True)
@@ -104,12 +104,13 @@ def main():
         loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
         worker.update_Qtarget()
 
-        overtime = platform.overtime
+        overtime_num = platform.overtime_num
+        average_overtime = platform.overtime / (picked_prebook_orders+1e-8)
         total_reward = platform.Total_Reward
         total_reward_pre = platform.Total_Reward_Pre
 
-        log = "Train Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime {:} , On-demand Loss {:}, Pre-booked Loss {:}".format(
-            j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime,loss,loss_pre)
+        log = "Train Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime_num {:} , Average Overtime {:} , On-demand Loss {:} , Pre-booked Loss {:}".format(
+            j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime_num,average_overtime,loss,loss_pre)
         print(log)
         with open("train.txt", 'a') as file:
             file.write(log + "\n")
@@ -142,12 +143,13 @@ def main():
                 demand.update()
                 picked_ondemand_orders += len(accepted_on)
                 picked_prebook_orders += len(accepted_pre)
-            overtime = platform.overtime
+            overtime_num = platform.overtime_num
+            average_overtime = platform.overtime / (picked_prebook_orders+1e-8)
             total_reward = platform.Total_Reward
             total_reward_pre = platform.Total_Reward_Pre
 
-            log = "Eval Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime {:}".format(
-                j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime)
+            log = "Eval Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime_num {:} , Average Overtime {:}".format(
+                j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime_num,average_overtime)
             print(log)
             with open("eval.txt", 'a') as file:
                 file.write(log + "\n")

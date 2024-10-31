@@ -137,7 +137,7 @@ class Worker():
             param.requires_grad = False
         self.Q_target_pre.eval()
         print('Platform total parameters:', 2 * sum(p.numel() for p in self.Q_training.parameters() if p.requires_grad))
-        self.update_Qtarget(tau=0.0)
+        self.update_Qtarget(tau=1.0)
 
         self.optim = torch.optim.Adam(self.Q_training.parameters(), lr=lr, weight_decay=0.0)
         self.optim_pre = torch.optim.Adam(self.Q_training_pre.parameters(), lr=lr, weight_decay=0.0)
@@ -239,6 +239,7 @@ class Worker():
 
     def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10):
         torch.set_grad_enabled(True)
+        net_train.train()
         pbar = tqdm.tqdm(range(train_times))
         loss_list = []
         for _ in pbar:
@@ -317,7 +318,7 @@ class Worker():
                     self.experience_pre[i].append(-1) # △t: -1 represents done
                     self.experience_pre[i].append(self.experience_pre[i][0]) # meaningless: only used to keep a same dimension
                     self.experience_pre[i].append(self.experience_pre[i][1])
-                    self.buffer.append(self.experience_pre[i], episode)
+                    self.buffer_pre.append(self.experience_pre[i], episode)
 
 
 def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route, new_route_time, assign_state):
@@ -358,12 +359,12 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     if assign_state == 1: # pickup pre-booked order
         observe_space[7:9] = observe_space[4:6]
-        observe_space[9] = np.sum(new_route_time)
+        observe_space[9] = int(np.sum(new_route_time) / 60)
         observe_space[2:7] = 0
         current_travel_route, current_travel_time = new_route, new_route_time
     elif assign_state == 2: # pickup on-demand order
         observe_space[7:9] = new_order[2:4]
-        observe_space[9] = np.sum(new_route_time)
+        observe_space[9] = int(np.sum(new_route_time) / 60)
         current_travel_route, current_travel_time = new_route, new_route_time
 
     # 3. run 1 minute

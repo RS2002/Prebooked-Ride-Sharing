@@ -1,4 +1,6 @@
 import torch
+from fontTools.merge.util import current_time
+
 from osrm import TSP_route
 from joblib import Parallel, delayed
 from scipy.optimize import linear_sum_assignment
@@ -35,8 +37,8 @@ class Platform():
         self.discount_factor = discount_factor
         self.Total_Reward = 0
         self.Total_Reward_Pre = 0
+        self.overtime_num = 0
         self.overtime = 0
-
 
     def assign(self,q_matrix):
         threshold = 0
@@ -85,7 +87,8 @@ class Platform():
             if assign_state == 1:
                 accepted_pre.append(order_pre_num[i])
                 if reward[0]<0:
-                    self.overtime += 1
+                    self.overtime_num += 1
+                    self.overtime += current_time + np.sum(result[2])/60 - order_pre[i][-1]
             elif assign_state == 2:
                 accepted_on.append(assignment[i])
             assign_state_table.append(assign_state)
@@ -110,7 +113,8 @@ def excute(observe_pre, order_pre, observe, assignment, new_orders_state, reward
             pick_pre_time = pick_pre_time[0]
             arrive_time = pick_pre_time + observe[9] + current_time # when the worker can arrive the origin of pre-booked order
             if arrive_time > observe[6]: # add overtime punishment for pre-booked order
-                reward = - punish_rate # * (arrive_time - observe[6])
+                # print(arrive_time,observe[6])
+                reward = - punish_rate * (arrive_time - observe[6])
             else:
                 reward = 0
             return [[observe_pre, order_pre, observe, None, current_time], [reward,None]], None, None, assign_state # in this circumstance, the assignment must be None
@@ -120,7 +124,8 @@ def excute(observe_pre, order_pre, observe, assignment, new_orders_state, reward
             pick_pre_time = pick_pre_time[0]
             arrive_time = pick_pre_time + current_time # when the worker can arrive the origin of pre-booked order
             if arrive_time > observe[6]: # add overtime punishment for pre-booked order
-                reward = - punish_rate # * (arrive_time - observe[6])
+                # print(arrive_time,observe[6])
+                reward = - punish_rate * (arrive_time - observe[6])
             elif arrive_time == observe[6]:
                 reward = 0
             if arrive_time >= observe[6]: # start to pick up pre-booked order
