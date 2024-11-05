@@ -249,6 +249,7 @@ class Worker():
         pid = self.zone_map[pid-1]
         did = self.zone_map[did-1]
         minute = order['minute']
+        type = order['type']
         plat, plon = self.coordinate_lookup_lat[pid], self.coordinate_lookup_lon[pid]
         dlat, dlon = self.coordinate_lookup_lat[did], self.coordinate_lookup_lon[did]
         minute = np.array(minute).reshape(-1,1)
@@ -256,7 +257,7 @@ class Worker():
         plon = np.array(plon).reshape(-1,1)
         dlat = np.array(dlat).reshape(-1,1)
         dlon = np.array(dlon).reshape(-1,1)
-        order = np.concatenate([plat,plon,dlat,dlon,minute],axis=-1)
+        order = np.concatenate([plat,plon,dlat,dlon,minute,type],axis=-1)
 
         torch.set_grad_enabled(False)
         # 1. calculate q-value
@@ -323,3 +324,36 @@ class Worker():
                 order.append(order_pre[assignment[i]])
                 self.observe_space[i,2:8] = order_pre[assignment[i]]
         return observe_pre, order
+
+
+def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route ,new_route_time ,new_remaining_time ,new_total_travel_time, assign_state):
+    full_experience = None
+    full_experience_pre = None
+
+    # 1. update experience
+    reward_list = feedback[1]
+    feedback = feedback[0]
+    reward_pre = reward_list[0]
+    reward = reward_list[1]
+
+    if reward_pre is not None:
+        if len(experience_pre) > 0:
+            experience_pre.append(feedback[0][-1] - experience_pre[0][-1])  # △t
+            experience_pre.append(feedback[0])  # s_next
+            experience_pre.append(feedback[1])  # a_next
+            full_experience_pre = experience_pre
+            experience_pre = []
+        experience_pre.append(feedback[0])  # s_current
+        experience_pre.append(feedback[1])  # a_current
+        experience_pre.append(reward_pre)  # r
+
+    if reward is not None:
+        if len(experience) > 0:
+            experience.append(feedback[2][-1] - experience[0][-1])  # △t
+            experience.append(feedback[2])  # s_next
+            experience.append(feedback[3])  # a_next
+            full_experience = experience
+            experience = []
+        experience.append(feedback[2])  # s_current
+        experience.append(feedback[3])  # a_current
+        experience.append(reward)  # r
