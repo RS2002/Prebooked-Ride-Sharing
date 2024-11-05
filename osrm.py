@@ -16,7 +16,7 @@ session.mount('https://', adapter)
 
 def TSP_route(origin_point, destination_points):
 
-    url = "http://localhost:5000/trip/v1/driving/" + str(origin_point[1]) + "," + str(origin_point[0]) + ";"
+    url = "http://localhost:6000/trip/v1/driving/" + str(origin_point[1]) + "," + str(origin_point[0]) + ";"
 
     for i in range(len(destination_points)):
         if i < len(destination_points) - 1:

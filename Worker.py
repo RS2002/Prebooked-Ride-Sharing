@@ -1,8 +1,5 @@
-import math
 import numpy as np
 import torch
-import pandas as pd
-
 from model import Q_Net
 from joblib import Parallel, delayed
 import torch.nn as nn
@@ -10,6 +7,46 @@ import tqdm
 import pickle
 
 INF = 1e8
+
+def norm(order_state, worker_state, history_order_state, lat_min = 40.68878421555262, lat_max = 40.875967791801536, lon_min = -74.04528828347375, lon_max = -73.91037864632285, simulation_time = 60, max_capacity = 3):
+    lat_range = lat_max - lat_min
+    lon_range = lon_max - lon_min
+
+    if isinstance(order_state, torch.Tensor):
+        worker_state, history_order_state, order_state = worker_state.clone(), history_order_state.clone(), order_state.clone()
+    else:
+        worker_state, history_order_state, order_state = worker_state.copy(), history_order_state.copy(), order_state.copy()
+
+    # 1. lat & lon
+    order_state[:,0] = (order_state[:,0] - lat_min) / lat_range
+    order_state[:,2] = (order_state[:,2] - lat_min) / lat_range
+    order_state[:,1] = (order_state[:,1] - lon_min) / lon_range
+    order_state[:,3] = (order_state[:,3] - lon_min) / lon_range
+
+    worker_state[:,0] = (worker_state[:,0] - lat_min) / lat_range
+    worker_state[:,1] = (worker_state[:,1] - lon_min) / lon_range
+
+    worker_state[:,2] = (worker_state[:,2] - lat_min) / lat_range * (worker_state[:,2] != 0)
+    worker_state[:,3] = (worker_state[:,3] - lon_min) / lon_range * (worker_state[:,3] != 0)
+    worker_state[:,4] = (worker_state[:,4] - lat_min) / lat_range * (worker_state[:,4] != 0)
+    worker_state[:,5] = (worker_state[:,5] - lon_min) / lon_range * (worker_state[:,5] != 0)
+
+    history_order_state[:,:,0] = (history_order_state[:,:,0] - lat_min) / lat_range * (history_order_state[:,:,0] != 0)
+    history_order_state[:,:,1] = (history_order_state[:,:,1] - lon_range) / lon_range * (history_order_state[:,:,1] != 0)
+
+    # 2. time
+    worker_state[:, 6] = worker_state[:, 6] / simulation_time
+    worker_state[:, 9] = worker_state[:, 9] / simulation_time
+    worker_state[:, 11] = worker_state[:, 11] / simulation_time
+    order_state[:,4] = order_state[:,4] / simulation_time
+    history_order_state[:,:,2] = history_order_state[:,:,2] / simulation_time
+    history_order_state[:,:,3] = history_order_state[:,:,3] / simulation_time
+
+    # 3. capacity
+    worker_state[:, 7] = worker_state[:, 7] / max_capacity
+
+    return order_state, worker_state, history_order_state
+
 
 class Buffer():
     def __init__(self,capacity = 1e5):
@@ -22,12 +59,18 @@ class Buffer():
 
         self.num = 0
 
-        self.state = [] # worker state
+        self.worker_state = []
+        self.order_state = []
+        self.order_num = []
+
         self.action = [] # order state
 
         self.delta_t = []
 
-        self.state_next = [] # next worker state
+        self.worker_state_next = []
+        self.order_state_next = []
+        self.order_num_next = []
+
         self.action_next = [] # next order state
 
         self.reward = []
@@ -37,19 +80,28 @@ class Buffer():
     def append(self, experience, episode=0):
         state, action, delta_t, reward, state_next, action_next = experience
         if self.num == self.capacity:
-            self.state = self.state[1:]
+            self.worker_state = self.worker_state[1:]
+            self.order_state = self.order_state[1:]
+            self.order_num = self.order_num[1:]
             self.action = self.action[1:]
             self.delta_t = self.delta_t[1:]
-            self.state_next = self.state_next[1:]
+            self.worker_state_next = self.worker_state_next[1:]
+            self.order_state_next = self.order_state_next[1:]
+            self.order_num_next = self.order_num_next[1:]
             self.action_next = self.action_next[1:]
             self.reward = self.reward[1:]
             self.episode = self.episode[1:]
         else:
             self.num+=1
-        self.state.append(state.tolist())
+
+        self.worker_state.append(state[0].tolist())
+        self.order_state.append(state[1].tolist())
+        self.order_num.append(state[2])
         self.action.append(action.tolist())
         self.delta_t.append(delta_t)
-        self.state_next.append(state_next.tolist())
+        self.worker_state_next.append(state_next[0].tolist())
+        self.order_state_next.append(state_next[1].tolist())
+        self.order_num_next.append(state_next[2])
         self.action_next.append(action_next.tolist())
         self.reward.append(reward)
         self.episode.append(episode)
@@ -61,52 +113,21 @@ class Buffer():
         probabilities = np.array(priority) / np.sum(priority)
         indices = np.random.choice(self.num, size, p=probabilities)
 
-        state = torch.tensor([self.state[i] for i in indices]).to(device)
+        worker_state = torch.tensor([self.worker_state[i] for i in indices]).to(device)
+        order_state = torch.tensor([self.order_state[i] for i in indices]).to(device)
+        order_num = torch.tensor([self.order_num[i] for i in indices]).to(device)
         action = torch.tensor([self.action[i] for i in indices]).to(device)
         delta_t = torch.tensor([self.delta_t[i] for i in indices]).to(device)
-        state_next = torch.tensor([self.state_next[i] for i in indices]).to(device)
+        worker_state_next = torch.tensor([self.worker_state[i] for i in indices]).to(device)
+        order_state_next = torch.tensor([self.order_state[i] for i in indices]).to(device)
+        order_num_next = torch.tensor([self.order_num[i] for i in indices]).to(device)
         action_next = torch.tensor([self.action_next[i] for i in indices]).to(device)
         reward = torch.tensor([self.reward[i] for i in indices]).to(device)
 
-        return state, action, delta_t, reward,  state_next, action_next
-
-
-
-def norm(worker_state, order_state, lat_min = 40.68878421555262, lat_max = 40.875967791801536, lon_min = -74.04528828347375, lon_max = -73.91037864632285, simulation_time = 60):
-    lat_range = lat_max - lat_min
-    lon_range = lon_max - lon_min
-
-    if isinstance(order_state, torch.Tensor):
-        worker_state, order_state = worker_state.clone(), order_state.clone()
-    else:
-        worker_state, order_state = worker_state.copy(), order_state.copy()
-
-    # 1. lat & lon
-    order_state[:,0] = (order_state[:,0] - lat_min) / lat_range
-    order_state[:,2] = (order_state[:,2] - lat_min) / lat_range
-    order_state[:,1] = (order_state[:,1] - lon_min) / lon_range
-    order_state[:,3] = (order_state[:,3] - lon_min) / lon_range
-
-    worker_state[:,0] = (worker_state[:,0] - lat_min) / lat_range
-    worker_state[:,1] = (worker_state[:,1] - lon_min) / lon_range
-
-    worker_state[:,2] = (worker_state[:,2] - lat_min) / lat_range
-    worker_state[:,3] = (worker_state[:,3] - lon_min) / lon_range
-    worker_state[:,4] = (worker_state[:,4] - lat_min) / lat_range
-    worker_state[:,5] = (worker_state[:,5] - lon_min) / lon_range
-    worker_state[:,7] = (worker_state[:,7] - lat_min) / lat_range
-    worker_state[:,8] = (worker_state[:,8] - lon_min) / lon_range
-
-    # 2. time
-    worker_state[:, 6] = worker_state[:, 6] / simulation_time
-    worker_state[:, 9] = worker_state[:, 9] / simulation_time
-    worker_state[:, 10] = worker_state[:, 10] / simulation_time
-    order_state[:,4] = order_state[:,4] / simulation_time
-
-    return worker_state, order_state
+        return worker_state, order_state, order_num, action, delta_t, reward, worker_state_next, order_state_next, order_num_next, action_next
 
 class Worker():
-    def __init__(self, buffer, buffer_pre, lr=0.0001, gamma=0.99, max_step=60, num=1000, device=None, zone_table_path = "./data/Manhattan_dic.pkl", model_path = None, model_pre_path = None, njobs = 24, arl = True, dropout = 0.0):
+    def __init__(self, buffer, buffer_pre, lr=0.0001, gamma=0.99, max_step=60, num=1000, device=None, zone_table_path = "./data/Manhattan_dic.pkl", model_path = None, model_pre_path = None, njobs = 24, bi_direction = True, dropout = 0.0):
         super().__init__()
         self.buffer = buffer
         self.buffer_pre = buffer_pre
@@ -123,11 +144,10 @@ class Worker():
         self.coordinate_lookup_lon = np.array(self.zone_dic["centroid_lon"])
         self.zone_map = np.array(self.zone_dic["map"])
 
-        self.Q_training = Q_Net(worker_state_size = 11, order_state_size = 5, hidden_dim=64, head=1, arl=arl, dropout=dropout).to(device)
-        self.Q_target = Q_Net(worker_state_size = 11, order_state_size = 5, hidden_dim=64, head=1, arl=arl, dropout=dropout).to(device)
-        self.Q_training_pre = Q_Net(worker_state_size = 11, order_state_size = 5, hidden_dim=64, head=1, arl=arl, dropout=dropout).to(device)
-        self.Q_target_pre = Q_Net(worker_state_size = 11, order_state_size = 5, hidden_dim=64, head=1, arl=arl, dropout=dropout).to(device)
-
+        self.Q_training = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_target = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_training_pre = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_target_pre = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
 
         self.load(model_path,model_pre_path,self.device)
         for param in self.Q_target.parameters():
@@ -150,7 +170,34 @@ class Worker():
 
         self.reset()
 
-    def reset(self,train=True):
+    def save(self, path1, path2):
+        torch.save(self.Q_training.state_dict(), path1)
+        torch.save(self.Q_training_pre.state_dict(), path2)
+
+    def load(self, path1=None, path2=None, device=torch.device("cpu")):
+        if device == torch.device("cpu"):
+            if path1 is not None:
+                self.Q_target.load_state_dict(torch.load(path1, map_location=torch.device('cpu')))
+                self.Q_training.load_state_dict(torch.load(path1, map_location=torch.device('cpu')))
+            if path2 is not None:
+                self.Q_training_pre.load_state_dict(torch.load(path2, map_location=torch.device('cpu')))
+                self.Q_target_pre.load_state_dict(torch.load(path2, map_location=torch.device('cpu')))
+        else:
+            if path1 is not None:
+                self.Q_target.load_state_dict(torch.load(path1))
+                self.Q_training.load_state_dict(torch.load(path1))
+            if path2 is not None:
+                self.Q_training_pre.load_state_dict(torch.load(path2))
+                self.Q_target_pre.load_state_dict(torch.load(path2))
+
+    def update_Qtarget(self, tau=0.005):
+        for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
+            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
+        for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
+            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
+
+
+    def reset(self, capacity = 3, train=True):
         if train:
             self.Q_training.train()
             self.Q_training_pre.train()
@@ -165,11 +212,24 @@ class Worker():
         '''
         observation space
         0,1: current lat,lon (required to be normalized before inputting to the network, following lat and lon remain same)
-        2-6: plat,plon,dlat,dlon,pre-booked time of the pre-booked order
-        7-9: dlat,dlon,remaining time of picked order
-        10: current time
+        2-7: plat,plon,dlat,dlon,pre-booked time of the pre-booked order,pre-booked order type (0 allows pooling, 1 does not)
+        8: remaining order place
+        9: remaining picking time
+        10: state -- 0 allows to pick up new orders, 1 does not (because picking up the order that doesn't allow pooling or the capacity is full)
+        11: current time
         '''
-        self.observe_space = np.zeros([self.num, 11])
+        self.observe_space = np.zeros([self.num, 10])
+        self.observe_space[:,8] = capacity
+
+        '''
+        current orders
+        0,1: drop-off lat,lon
+        2: remaining transportation time (approximated)
+        3: total transportation time (approximated)
+        4: type (0 allows pooling, 1 does not)
+        '''
+        self.current_orders = np.zeros([self.num, capacity, 4])
+        self.current_order_num = np.zeros([self.num])
 
         # allocate a initial location randomly from valid zone
         random_integers = np.random.randint(0, len(self.coordinate_lookup_lat), size=(self.num))
@@ -181,32 +241,6 @@ class Worker():
         self.travel_time = [[] for _ in range(self.num)]
         self.experience = [[] for _ in range(self.num)]
         self.experience_pre = [[] for _ in range(self.num)]
-
-    def save(self, path1, path2):
-        torch.save(self.Q_training.state_dict(), path1)
-        torch.save(self.Q_training_pre.state_dict(), path2)
-
-    def load(self, path1 = None, path2 = None, device = torch.device("cpu")):
-        if device == torch.device("cpu"):
-            if path1 is not None:
-                self.Q_target.load_state_dict(torch.load(path1,map_location=torch.device('cpu')))
-                self.Q_training.load_state_dict(torch.load(path1,map_location=torch.device('cpu')))
-            if path2 is not None:
-                self.Q_training_pre.load_state_dict(torch.load(path2,map_location=torch.device('cpu')))
-                self.Q_target_pre.load_state_dict(torch.load(path2,map_location=torch.device('cpu')))
-        else:
-            if path1 is not None:
-                self.Q_target.load_state_dict(torch.load(path1))
-                self.Q_training.load_state_dict(torch.load(path1))
-            if path2 is not None:
-                self.Q_training_pre.load_state_dict(torch.load(path2))
-                self.Q_target_pre.load_state_dict(torch.load(path2))
-
-    def update_Qtarget(self,tau=0.005):
-        for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
-            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
-        for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
-            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
     def observe(self, network, order, current_time, exploration_rate=0):
         # 0. process order state
@@ -227,14 +261,14 @@ class Worker():
         torch.set_grad_enabled(False)
         # 1. calculate q-value
         self.observe_space[:,-1] = current_time
-        worker_state, order_state = norm(self.observe_space, order)
-        worker_state, order_state = torch.tensor(worker_state).to(self.device), torch.tensor(order_state).to(self.device)
-        q_value = network(worker_state, order_state)
+        x1, x2, x3 = norm(order, self.observe_space, self.current_orders)
+        x1, x2, x3 = torch.tensor(x1).to(self.device), torch.tensor(x2).to(self.device), torch.tensor(x3).to(self.device)
+        q_value = network(x1, x2, x3, self.current_order_num)
         # 2. epsilon-greedy explore
         exploration_matrix = torch.rand_like(q_value)
         q_value[exploration_matrix < exploration_rate] = INF
         # 3. delete the Q value of not available workers
-        q_value[self.observe_space[:,7]!=0] = -INF
+        q_value[self.observe_space[:,9]!=0] = -INF
         return q_value.cpu().detach().numpy(), order
 
     def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10):
@@ -243,16 +277,16 @@ class Worker():
         pbar = tqdm.tqdm(range(train_times))
         loss_list = []
         for _ in pbar:
-            state, action, delta_t, reward, state_next, action_next = buffer.sample(batch_size,self.device)
-            state, action = norm(state, action)
-            state_next, action_next = norm(state_next, action_next)
+            worker_state, order_state, order_num, action, delta_t, reward, worker_state_next, order_state_next, order_num_next, action_next = buffer.sample(batch_size,self.device)
+            x1,x2,x3 = norm(action,worker_state,order_state)
+            x1_next,x2_next,x3_next = norm(action_next,worker_state_next, order_state_next)
 
-            current_q_value = net_train(state, action)
+            current_q_value = net_train(x1,x2,x3,order_num)
             current_q_value = torch.diag(current_q_value)
 
-            next_q_value1 = net_train(state_next, action_next)
+            next_q_value1 = net_train(x1_next,x2_next,x3_next,order_num_next)
             next_q_value1 = torch.diag(next_q_value1).detach()
-            next_q_value2 = net_target(state_next, action_next)
+            next_q_value2 = net_target(x1_next,x2_next,x3_next,order_num_next)
             next_q_value2 = torch.diag(next_q_value2).detach()
             next_q_value = torch.min(next_q_value1,next_q_value2)
 
@@ -280,107 +314,12 @@ class Worker():
 
     def update_pre(self, assignment, order_pre):
         observe_pre = self.observe_space.copy()
-        self.observe_space[:, 2:7] = 0
+        self.observe_space[:, 2:8] = 0
         order = []
         for i in range(self.num):
             if assignment[i] is None:
                 order.append(None)
             else:
                 order.append(order_pre[assignment[i]])
-                self.observe_space[i,2:7] = order_pre[assignment[i]]
+                self.observe_space[i,2:8] = order_pre[assignment[i]]
         return observe_pre, order
-
-
-    def update(self, feedback_table, new_route_table ,new_route_time_table, assign_state_table, final_step=False, episode=1):
-        # update each worker state parallely
-        results = Parallel(n_jobs=self.njobs)(
-            delayed(single_update)(self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i], feedback_table[i], new_route_table[i], new_route_time_table[i], assign_state_table[i])
-            for i in range(self.num))
-        # for i in range(self.num):
-        #     single_update(self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i], feedback_table[i], new_route_table[i], new_route_time_table[i], assign_state_table[i])
-
-        for i in range(len(results)):
-            self.observe_space[i], self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i] = results[i][0], results[i][1], results[i][2], results[i][3], results[i][4]
-
-            if self.is_train:
-                if results[i][5] is not None:
-                    self.buffer.append(results[i][5], episode)
-                if results[i][6] is not None:
-                    self.buffer_pre.append(results[i][6], episode)
-        if final_step:
-            for i in range(self.num):
-                if len(self.experience[i])>0:
-                    self.experience[i].append(-1) # △t: -1 represents done
-                    self.experience[i].append(self.experience[i][0]) # meaningless: only used to keep a same dimension
-                    self.experience[i].append(self.experience[i][1])
-                    self.buffer.append(self.experience[i], episode)
-                if len(self.experience_pre[i])>0:
-                    self.experience_pre[i].append(-1) # △t: -1 represents done
-                    self.experience_pre[i].append(self.experience_pre[i][0]) # meaningless: only used to keep a same dimension
-                    self.experience_pre[i].append(self.experience_pre[i][1])
-                    self.buffer_pre.append(self.experience_pre[i], episode)
-
-
-def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route, new_route_time, assign_state):
-    full_experience = None
-    full_experience_pre = None
-
-    # 1. update experience
-    reward_list = feedback[1]
-    feedback = feedback[0]
-    reward_pre = reward_list[0]
-    reward = reward_list[1]
-
-    if reward_pre is not None:
-        if len(experience_pre) > 0:
-            experience_pre.append(feedback[0][-1] - experience_pre[0][-1])  # △t
-            experience_pre.append(feedback[0])  # s_next
-            experience_pre.append(feedback[1])  # a_next
-            full_experience_pre = experience_pre
-            experience_pre = []
-        experience_pre.append(feedback[0])  # s_current
-        experience_pre.append(feedback[1])  # a_current
-        experience_pre.append(reward_pre)  # r
-
-    if reward is not None:
-        if len(experience) > 0:
-            experience.append(feedback[2][-1] - experience[0][-1])  # △t
-            experience.append(feedback[2])  # s_next
-            experience.append(feedback[3])  # a_next
-            full_experience = experience
-            experience = []
-        experience.append(feedback[2])  # s_current
-        experience.append(feedback[3])  # a_current
-        experience.append(reward)  # r
-
-    # 2. update state
-    observe_space = feedback[2]
-    new_order = feedback[3]
-
-    if assign_state == 1: # pickup pre-booked order
-        observe_space[7:9] = observe_space[4:6]
-        observe_space[9] = int(np.sum(new_route_time) / 60)
-        observe_space[2:7] = 0
-        current_travel_route, current_travel_time = new_route, new_route_time
-    elif assign_state == 2: # pickup on-demand order
-        observe_space[7:9] = new_order[2:4]
-        observe_space[9] = int(np.sum(new_route_time) / 60)
-        current_travel_route, current_travel_time = new_route, new_route_time
-
-    # 3. run 1 minute
-    if len(current_travel_time)!=0:
-        observe_space[9] -= 1
-        if observe_space[9]<=0: # order finish
-            current_travel_route, current_travel_time = [], []
-            observe_space[7:10] = 0
-        else:
-            step = 60 # 60 second
-            for i in range(len(current_travel_time)):
-                if step >= current_travel_time[i]:
-                    step -= current_travel_time[i]
-                else:
-                    current_travel_time[i] -= step
-                    current_travel_time = current_travel_time[i:]
-                    current_travel_route = current_travel_route[i:]
-                    break
-    return observe_space, current_travel_route, current_travel_time, experience, experience_pre, full_experience, full_experience_pre
