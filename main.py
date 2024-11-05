@@ -1,11 +1,11 @@
 from Worker import Buffer, Worker
-from Platform import Platform, reward_func_generator
+from Platform import Platform, reward_func_generator, assign
 from Order_Env import Demand
 import argparse
 import tqdm
 import torch
-import numpy as np
 import pickle
+import numpy as np
 
 def get_args():
     parser = argparse.ArgumentParser(description='')
@@ -21,13 +21,15 @@ def get_args():
     parser.add_argument('--buffer_capacity', type=int, default=10000)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_sample_rate', type=float, default=0.20)
+    parser.add_argument('--prebooked_pooling_rate', type=float, default=0.80)
+    parser.add_argument('--ondemand_pooling_rate', type=float, default=0.80)
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
-    parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,2.0,4.0])
-    parser.add_argument('--punishment', type=float, default=10.0)
+    parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,2.0,2.0,4.0])
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[30.0,30.0])
 
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument("--arl", action="store_true",default=True)
+    parser.add_argument("--bi_direction", action="store_true",default=True)
     parser.add_argument('--eval_episode', type=int, default=10)
 
     parser.add_argument('--epsilon', type=float, default=1.0)
@@ -38,7 +40,7 @@ def get_args():
     parser.add_argument("--cuda", type=str, default='0')
 
     parser.add_argument('--init_episode', type=int, default=0)
-    parser.add_argument('--njobs', type=int, default=48)
+    parser.add_argument('--njobs', type=int, default=24)
 
     parser.add_argument("--model_path",type=str,default=None)
     parser.add_argument("--model_pre_path",type=str,default=None)
@@ -54,6 +56,9 @@ def main():
     device_name = "cuda:" + args.cuda
     device = torch.device(device_name if torch.cuda.is_available() and not args.cpu else 'cpu')
 
+    train_list = []
+    eval_list = []
+
     exploration_rate = args.epsilon
     epsilon_decay_rate = args.epsilon_decay_rate
     epsilon_final = args.epsilon_final
@@ -66,8 +71,8 @@ def main():
     demand = Demand(demand_path=args.demand_path, zone_table = zone_table)
     buffer = Buffer(capacity=args.buffer_capacity)
     buffer_pre = Buffer(capacity=args.buffer_capacity)
-    worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, arl = args.arl, dropout = args.dropout)
-    reward_func = reward_func_generator(args.reward_parameter, args.order_threshold)
+    worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, bi_direction = args.bi_direction, dropout = args.dropout)
+    reward_func = reward_func_generator(args.reward_parameter)
 
     best_reward = -1e-8
     best_epoch = 0
@@ -79,94 +84,141 @@ def main():
         j += 1
         worker.reset(train=True)
         platform.reset(discount_factor=args.gamma)
-        demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = args.prebooked_sample_rate, p_sample = args.demand_sample_rate, wait_time = args.order_max_wait_time)
-
+        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = args.prebooked_sample_rate, p_sample = args.demand_sample_rate, p_pooling = args.ondemand_pooling_rate, p_pooling_pre = args.prebooked_pooling_rate, wait_time = args.order_max_wait_time)
         exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
         print("Exploration Rate: ", exploration_rate)
-
-        picked_ondemand_orders = 0
-        picked_prebook_orders = 0
-
         pbar = tqdm.tqdm(range(args.max_step))
         for t in pbar:
             q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t, exploration_rate)
-            assignment_pre, _ = platform.assign(q_value)
+            assignment_pre, _ = assign(q_value)
             observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)
             q_value, order = worker.observe(worker.Q_training, demand.current_demand, t, exploration_rate)
-            assignment, _ = platform.assign(q_value)
-            feedback_table, new_route_table, new_route_time_table, accepted_pre, accepted_on, assign_state_table = platform.feedback(observe_pre, order_pre, assignment_pre, worker.observe_space, assignment, order, reward_func, args.punishment, t)
-            worker.update(feedback_table, new_route_table, new_route_time_table, assign_state_table, (t == args.max_step - 1), j)
+            assignment, _ = assign(q_value)
+            feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on = platform.feedback(observe_pre, order_pre, assignment_pre, worker.observe_space, worker.current_orders, worker.current_order_num, assignment, order, args.order_max_wait_time, reward_func, args.reward_parameter2, t)
+            worker.update(feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
-            picked_ondemand_orders += len(accepted_on)
-            picked_prebook_orders += len(accepted_pre)
         loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
         loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
         worker.update_Qtarget()
 
-        overtime_num = platform.overtime_num
-        average_overtime = platform.overtime / (picked_prebook_orders+1e-8)
-        total_reward = platform.Total_Reward
-        total_reward_pre = platform.Total_Reward_Pre
+        # prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling = prebooked_pooling + 1e-8, prebooked_nonpooling + 1e-8, ondemand_pooling + 1e-8, ondemand_nonpooling + 1e-8
+        total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
+        Pickup_Num = np.array(platform.Pickup_Num)
+        Detour = np.array(platform.Detour)
+        Overtime_num = np.array(platform.Overtime_num)
+        Overtime = np.array(platform.Overtime)
+        service_rate = Pickup_Num / total_demand
+        average_detour = Detour / Pickup_Num
+        overtime_average = Overtime / total_demand[:2]
+        overtime_rate = Overtime_num / total_demand[:2]
+        reward = platform.Total_Reward / args.worker_num
+        reward_pre = platform.Total_Reward_Pre / args.worker_num
+        # prebooked_pooling_servicerate = Pickup_Num[0] / prebooked_pooling
+        # prebooked_nonpooling_servicerate = Pickup_Num[1] / prebooked_nonpooling
+        # ondemand_pooling_servicerate = Pickup_Num[2] / ondemand_pooling
+        # ondemand_nonpooling_servicerate = Pickup_Num[3] / ondemand_nonpooling
+        # detour_average = np.array(Detour) / np.array(Pickup_Num)
+        # overtime_average = np.array(Overtime) / np.array(Pickup_Num)[:2]
+        # overtime_rate_pooling = Overtime_num[0] / prebooked_pooling
+        # overtime_rate_nonpooling = Overtime_num[1] / prebooked_nonpooling
+        # print(prebooked_pooling_servicerate, prebooked_nonpooling_servicerate, ondemand_pooling_servicerate, ondemand_nonpooling_servicerate)
+        # print(detour_average, overtime_average)
+        # print(overtime_rate_pooling, overtime_rate_nonpooling)
 
-        log = "Train Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime_num {:} , Average Overtime {:} , On-demand Loss {:} , Pre-booked Loss {:}".format(
-            j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime_num,average_overtime,loss,loss_pre)
-        print(log)
-        with open("train.txt", 'a') as file:
-            file.write(log + "\n")
+        print("Train Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, On-demand Loss {:}, Pre-booked Loss {:}".format(j, reward, reward_pre,loss,loss_pre))
+        print("Service Rate:", service_rate)
+        print("Average Detour:", average_detour)
+        print("Overtime Rate:", overtime_rate)
+        print("Average Overtime:", overtime_average)
         worker.save("latest.pth", "latest_pre.pth")
+        dic = {
+            'episode': j,
+            'service_rate': service_rate,
+            'average_detour': average_detour,
+            'overtime_rate': overtime_rate,
+            'overtime_average': overtime_average,
+            'reward': reward,
+            'reward_pre': reward_pre,
+            'loss': loss,
+            'loss_pre': loss_pre
+        }
+        train_list.append(dic)
+        with open('train.pkl', 'wb') as f:
+            pickle.dump(train_list, f)
 
 
         if j % args.eval_episode == 0:
             worker.reset(train=False)
             platform.reset(discount_factor=args.gamma)
-            demand.reset(day=1, hour=7, start_time=0, pre_sample=args.prebooked_sample_rate,
-                         p_sample=args.demand_sample_rate, wait_time=args.order_max_wait_time)
-
-            picked_ondemand_orders = 0
-            picked_prebook_orders = 0
-
+            ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=7,
+                                                                                                          start_time=0,
+                                                                                                          pre_sample=args.prebooked_sample_rate,
+                                                                                                          p_sample=args.demand_sample_rate,
+                                                                                                          p_pooling=args.ondemand_pooling_rate,
+                                                                                                          p_pooling_pre=args.prebooked_pooling_rate,
+                                                                                                          wait_time=args.order_max_wait_time)
+            print("Exploration Rate: ", 0)
             pbar = tqdm.tqdm(range(args.max_step))
             for t in pbar:
                 q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t,
                                                     0)
-                assignment_pre, _ = platform.assign(q_value)
+                assignment_pre, _ = assign(q_value)
                 observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)
                 q_value, order = worker.observe(worker.Q_training, demand.current_demand, t, 0)
-                assignment, _ = platform.assign(q_value)
-                feedback_table, new_route_table, new_route_time_table, accepted_pre, accepted_on, assign_state_table = platform.feedback(
-                    observe_pre, order_pre, assignment_pre, worker.observe_space, assignment, order, reward_func,
-                    args.punishment, t)
-                worker.update(feedback_table, new_route_table, new_route_time_table, assign_state_table,
-                              (t == args.max_step - 1), j)
+                assignment, _ = assign(q_value)
+                feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on = platform.feedback(
+                    observe_pre, order_pre, assignment_pre, worker.observe_space, worker.current_orders,
+                    worker.current_order_num, assignment, order, args.order_max_wait_time, reward_func,
+                    args.reward_parameter2, t)
+                worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table,
+                              new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
                 demand.pickup(accepted_on, accepted_pre)
                 demand.update()
-                picked_ondemand_orders += len(accepted_on)
-                picked_prebook_orders += len(accepted_pre)
-            overtime_num = platform.overtime_num
-            average_overtime = platform.overtime / (picked_prebook_orders+1e-8)
-            total_reward = platform.Total_Reward
-            total_reward_pre = platform.Total_Reward_Pre
 
-            log = "Eval Episode {:} , On-demand Reward {:} , Pre-booked Reward {:} , On-demand Pickup {:} , Pre-booked Pickup {:} , Pre-booked Overtime_num {:} , Average Overtime {:}".format(
-                j, total_reward, total_reward_pre, picked_ondemand_orders,picked_prebook_orders,overtime_num,average_overtime)
-            print(log)
-            with open("eval.txt", 'a') as file:
-                file.write(log + "\n")
+            total_demand = np.array(
+                [prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling])  # + 1e-8
+            Pickup_Num = np.array(platform.Pickup_Num)
+            Detour = np.array(platform.Detour)
+            Overtime_num = np.array(platform.Overtime_num)
+            Overtime = np.array(platform.Overtime)
+            service_rate = Pickup_Num / total_demand
+            average_detour = Detour / Pickup_Num
+            overtime_average = Overtime / total_demand[:2]
+            overtime_rate = Overtime_num / total_demand[:2]
+            reward = platform.Total_Reward / args.worker_num
+            reward_pre = platform.Total_Reward_Pre / args.worker_num
+            print("Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}".format(j, reward, reward_pre))
+            print("Service Rate:", service_rate)
+            print("Average Detour:", average_detour)
+            print("Overtime Rate:", overtime_rate)
+            print("Average Overtime:", overtime_average)
+            dic = {
+                'episode': j,
+                'service_rate': service_rate,
+                'average_detour': average_detour,
+                'overtime_rate': overtime_rate,
+                'overtime_average': overtime_average,
+                'reward': reward,
+                'reward_pre': reward_pre,
+            }
+            eval_list.append(dic)
+            with open('eval.pkl', 'wb') as f:
+                pickle.dump(eval_list, f)
 
-        total_reward += total_reward_pre
-        if total_reward > best_reward:
-            best_epoch = 0
-            best_reward = total_reward
-            worker.save("best.pth", "best_pre.pth")
-        else:
-            best_epoch += 1
-        if j == args.minimum_episode:
-            best_epoch = 0
-        elif j > args.minimum_episode:
-            print("Converge Step: ", best_epoch)
-            if best_epoch >= args.converge_epoch:
-                break
+            total_reward = reward + reward_pre
+            if total_reward > best_reward:
+                best_epoch = 0
+                best_reward = total_reward
+                worker.save("best.pth", "best_pre.pth")
+            else:
+                best_epoch += 1
+            if j == args.minimum_episode:
+                best_epoch = 0
+            elif j > args.minimum_episode:
+                print("Converge Step: ", best_epoch)
+                if best_epoch >= args.converge_epoch:
+                    break
 
 if __name__ == '__main__':
     main()

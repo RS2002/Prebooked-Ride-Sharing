@@ -31,15 +31,20 @@ class Demand():
         self.filtered_demand['type'] = np.random.choice([0, 1], size=len(self.filtered_demand), p=[p_pooling, 1 - p_pooling])
         self.filtered_demand_pre['type'] = np.random.choice([0, 1], size=len(self.filtered_demand_pre), p=[p_pooling_pre, 1 - p_pooling_pre])
 
-        print("total number of on-demand order at this episode is:", len(self.filtered_demand))
-        print("total number of pre-booked order at this episode is:", len(self.filtered_demand_pre))
+        ondemand_pooling = (self.filtered_demand['type'] == 0).sum()
+        ondemand_nonpooling = (self.filtered_demand['type'] == 1).sum()
+        prebooked_pooling = (self.filtered_demand_pre['type'] == 0).sum()
+        prebooked_nonpooling = (self.filtered_demand_pre['type'] == 1).sum()
+
+        print("total number of on-demand order at this episode is:", ondemand_pooling, ondemand_nonpooling)
+        print("total number of pre-booked order at this episode is:", prebooked_pooling, prebooked_nonpooling)
 
         self.current_demand = self.filtered_demand.loc[self.filtered_demand['minute'] == start_time].reset_index(drop=True)
         self.current_demand_pre = self.filtered_demand_pre.copy().reset_index(drop=True)
         self.current_time = start_time
         self.num_lost_demand = 0
         self.wait_time = wait_time
-
+        return ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling
 
     '''
     update the order in the next minute
