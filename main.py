@@ -11,25 +11,26 @@ def get_args():
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('--batch_size', type=int, default=512)
-    parser.add_argument('--train_times', type=int, default=20)
+    parser.add_argument('--train_times', type=int, default=30)
     parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=500)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=10000)
+    parser.add_argument('--buffer_capacity', type=int, default=20000)
+    parser.add_argument('--buffer_capacity_pre', type=int, default=40000)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_sample_rate', type=float, default=0.20)
     parser.add_argument('--prebooked_pooling_rate', type=float, default=0.80)
     parser.add_argument('--ondemand_pooling_rate', type=float, default=0.80)
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
-    parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,2.0,2.0,4.0])
-    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[30.0,30.0])
+    parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0])
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[50.0,15.0,5.0,5.0])
 
     parser.add_argument('--dropout', type=float, default=0.0)
-    parser.add_argument("--bi_direction", action="store_true",default=True)
+    parser.add_argument("--bi_direction", action="store_true",default=False)
     parser.add_argument('--eval_episode', type=int, default=10)
 
     parser.add_argument('--epsilon', type=float, default=1.0)
@@ -70,7 +71,7 @@ def main():
     platform = Platform(discount_factor=args.gamma, njobs=args.njobs)
     demand = Demand(demand_path=args.demand_path, zone_table = zone_table)
     buffer = Buffer(capacity=args.buffer_capacity)
-    buffer_pre = Buffer(capacity=args.buffer_capacity)
+    buffer_pre = Buffer(capacity=args.buffer_capacity_pre)
     worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, bi_direction = args.bi_direction, dropout = args.dropout)
     reward_func = reward_func_generator(args.reward_parameter)
 
@@ -110,8 +111,8 @@ def main():
         Overtime = np.array(platform.Overtime)
         service_rate = Pickup_Num / total_demand
         average_detour = Detour / Pickup_Num
-        overtime_average = Overtime / total_demand[:2]
-        overtime_rate = Overtime_num / total_demand[:2]
+        overtime_average = Overtime / Pickup_Num[:2]
+        overtime_rate = (Overtime_num + (total_demand[:2] - Pickup_Num[:2])) / total_demand[:2]
         reward = platform.Total_Reward / args.worker_num
         reward_pre = platform.Total_Reward_Pre / args.worker_num
         # prebooked_pooling_servicerate = Pickup_Num[0] / prebooked_pooling
@@ -184,8 +185,8 @@ def main():
             Overtime = np.array(platform.Overtime)
             service_rate = Pickup_Num / total_demand
             average_detour = Detour / Pickup_Num
-            overtime_average = Overtime / total_demand[:2]
-            overtime_rate = Overtime_num / total_demand[:2]
+            overtime_average = Overtime / Pickup_Num[:2]
+            overtime_rate = (Overtime_num + (total_demand[:2] - Pickup_Num[:2])) / total_demand[:2]
             reward = platform.Total_Reward / args.worker_num
             reward_pre = platform.Total_Reward_Pre / args.worker_num
             print("Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}".format(j, reward, reward_pre))

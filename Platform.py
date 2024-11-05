@@ -127,7 +127,7 @@ class Platform():
         return feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on
 
 '''
-reward_parameter_list: 0 -- on-time reward, 1 -- conflict punishment
+reward_parameter_list: 0 -- on-time reward, 1 -- conflict punishment, 2 -- punishment scale (used for those have been already over time), 3 -- conflict punishment (for on-demand agent)
 '''
 def excute(observe_pre, order_pre, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
     assign_state = 0 # 0: no action, 1: pick up pre-booked order, 2: pick up on-demand order
@@ -175,6 +175,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
 
             if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
                 reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6])
+                if current_time > observe[6]:
+                    reward_pre *= reward_parameter_list[2]
             else:
                 reward_pre = 0
             return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], None], None, None, None, None, assign_state, log  # in this circumstance, the assignment must be None
@@ -187,6 +189,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     assign_state = 1
                     if arrive_time > observe[6]:
                         reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6])
+                        if current_time > observe[6]:
+                            reward_pre *= reward_parameter_list[2]
                     elif arrive_time == observe[6]:
                         reward_pre = reward_parameter_list[0]
 
@@ -225,6 +229,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                         assign_state = 1
                         if arrive_time > observe[6]:
                             reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6])
+                            if current_time > observe[6]:
+                                reward_pre *= reward_parameter_list[2]
                         elif arrive_time == observe[6]:
                             reward_pre = reward_parameter_list[0]
 
@@ -254,6 +260,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     arrive_time = pick_pre_time + rest_finishing_time + current_time
                     if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
                         reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6]) # currently, the worker may be still assigned an on-demand order
+                        if current_time > observe[6]:
+                            reward_pre *= reward_parameter_list[2]
                     else:
                         reward_pre = 0
 
@@ -277,7 +285,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                 pick_pre_time = pick_pre_time[0]
                 arrive_time = pickup_time + direct_time + pick_pre_time + current_time
                 if arrive_time > observe[6]: # reject the on-demand order if any conflict exists
-                    reward = 0
+                    # reward = 0
+                    reward = - reward_parameter_list[3] * (arrive_time - observe[6])
                     return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], new_orders_state[assignment], current_time],[reward_pre,reward], None], None, None, None, None, assign_state, log
 
         else: # if the new on-demand order allows pooling
@@ -295,7 +304,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     arrive_time = pickup_time + pick_pre_time + current_time
 
                 if arrive_time > observe[6]: # reject the on-demand order if any conflict exists
-                    reward = 0
+                    # reward = 0
+                    reward = - reward_parameter_list[3] * (arrive_time - observe[6])
                     return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], new_orders_state[assignment], current_time],[reward_pre,reward], None], None, None, None, None, assign_state, log
 
         # Then we can assign the new order as traditional pooling scenario
