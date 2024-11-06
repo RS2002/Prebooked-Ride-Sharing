@@ -43,7 +43,7 @@ def norm(order_state, worker_state, history_order_state, lat_min = 40.6887842155
     history_order_state[:,:,3] = history_order_state[:,:,3] / simulation_time
 
     # 3. capacity
-    worker_state[:, 7] = worker_state[:, 7] / max_capacity
+    worker_state[:, 8] = worker_state[:, 8] / max_capacity
 
     return order_state, worker_state, history_order_state
 
@@ -341,7 +341,7 @@ class Worker():
                 if results[i][8] is not None:
                     self.buffer_pre.append(results[i][8], episode)
 
-        if final_step:
+        if self.is_train and final_step:
             for i in range(self.num):
                 if len(self.experience[i])>0:
                     self.experience[i].append(-1) # △t: -1 represents done

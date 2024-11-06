@@ -326,7 +326,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
         timeout = np.sum(new_total_travel_time > time_threshold)  # how many orders will be over time
         reward = reward_func(time_add,timeout,pickup_time2,direct_distance)
         if reward_pre is not None:
-            reward_pre += reward
+            reward_pre += reward * reward_parameter_list[4]
 
         log["workload"] = np.max(new_total_travel_time) - np.max(current_order_state[:, 3])
         log["direct"] = direct_time
