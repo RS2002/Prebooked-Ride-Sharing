@@ -62,7 +62,7 @@ class Platform():
         self.Assigment = 0 # total assignment times of pre-booked orders
 
 
-    def feedback(self, observe_pre, order_pre, order_pre_num, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
+    def feedback(self, observe_pre, order_pre, assignment_pre, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
         feedback_table = []
         new_route_table = []
         new_route_time_table = []
@@ -95,7 +95,7 @@ class Platform():
 
             assign_state = result[5]
             if assign_state == 1:
-                accepted_pre.append(order_pre_num[i])
+                accepted_pre.append(assignment_pre[i])
                 overtime = log["pickup"]
                 pickup_time = log["pickup"]
                 overtime_num = int(overtime>0)

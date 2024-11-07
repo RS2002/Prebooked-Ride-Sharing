@@ -78,7 +78,6 @@ def main():
     best_reward = -1e-8
     best_epoch = 0
 
-
     j = args.init_episode
     exploration_rate = max(exploration_rate * (epsilon_decay_rate**j), epsilon_final)
 
@@ -98,13 +97,16 @@ def main():
         p_pooling = pooling_rate
         ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, p_pooling_pre = p_pooling, wait_time = args.order_max_wait_time)
 
-        explore_threshold = 0.7
-        rand = random.random()
-        if rand <= explore_threshold:
-            exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-            exploration_rate_temp = exploration_rate
-        else:
-            exploration_rate_temp = 0
+        # explore_threshold = 0.7
+        # rand = random.random()
+        # if rand <= explore_threshold:
+        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        #     exploration_rate_temp = exploration_rate
+        # else:
+        #     exploration_rate_temp = 0
+
+        exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        exploration_rate_temp = exploration_rate
 
         print("Exploration Rate: ", exploration_rate_temp)
         pbar = tqdm.tqdm(range(args.max_step))
@@ -189,7 +191,6 @@ def main():
             platform.reset(discount_factor=args.gamma)
 
             # day = random.randint(1, 30)
-
             # pre_sample = 0.2
             # p_pooling = 0.8
             pre_sample = prebooked_rate
@@ -279,6 +280,7 @@ def main():
             with open('eval.pkl', 'wb') as f:
                 pickle.dump(eval_list, f)
 
+            total_reward = reward + reward_pre
             if total_reward > best_reward:
                 best_epoch = 0
                 best_reward = total_reward
@@ -292,5 +294,7 @@ def main():
                 if best_epoch >= args.converge_epoch:
                     break
             print()
+
+
 if __name__ == '__main__':
     main()

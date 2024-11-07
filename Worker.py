@@ -134,11 +134,11 @@ class Buffer():
         if size>self.num:
             size = self.num
 
-        indices = np.random.randint(0, self.num, size=size)
-        # priority = np.array(self.episode)
-        # priority = priority - np.min(priority) + 1
-        # probabilities = np.array(priority) / np.sum(priority)
-        # indices = np.random.choice(self.num, size, p=probabilities)
+        # indices = np.random.randint(0, self.num, size=size)
+        priority = np.array(self.episode)
+        priority = priority - np.min(priority) + 1
+        probabilities = np.array(priority) / np.sum(priority)
+        indices = np.random.choice(self.num, size, p=probabilities)
 
         worker_state = torch.tensor([self.worker_state[i] for i in indices]).to(device)
         order_state = torch.tensor([self.order_state[i] for i in indices]).to(device)
@@ -433,7 +433,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     if reward_pre is not None:
         if len(experience_pre) > 0:
-            experience_pre.append(feedback[4] - experience_pre[0][-1])  # △t
+            experience_pre.append(feedback[4] - experience_pre[0][0][-1])  # △t
             experience_pre.append(feedback[0])  # s_next
             experience_pre.append(feedback[1])  # a_next
             full_experience_pre = experience_pre
@@ -444,7 +444,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     if reward is not None:
         if len(experience) > 0:
-            experience.append(feedback[4] - experience[0][-1])  # △t
+            experience.append(feedback[4] - experience[0][0][-1])  # △t
             experience.append(feedback[2])  # s_next
             experience.append(feedback[3])  # a_next
             full_experience = experience
@@ -464,9 +464,10 @@ def single_update(current_travel_route, current_travel_time, experience, experie
         observe_space[10] = 1 # not available state
         current_orders[current_orders_num,0:2] = observe_space[4:6] # dlat and dlon
         current_orders[current_orders_num,4] = observe_space[7] # order type
-        current_orders[:current_orders_num+1, 2], current_orders[:current_orders_num+1, 3] = new_remaining_time, new_total_travel_time
         current_orders_num += 1
+        current_orders[:current_orders_num, 2], current_orders[:current_orders_num, 3] = new_remaining_time, new_total_travel_time
         current_travel_route, current_travel_time = new_route, new_route_time
+        observe_space[2:8] = 0
     elif assign_state == 2:  # pickup on-demand order
         observe_space[0:2] = new_order[0:2]  # plat and plon
         observe_space[8] -= 1  # seat
@@ -474,8 +475,8 @@ def single_update(current_travel_route, current_travel_time, experience, experie
         observe_space[10] = 1  # not available state
         current_orders[current_orders_num, 0:2] = new_order[2:4]  # dlat and dlon
         current_orders[current_orders_num, 4] = new_order[5]  # order type
-        current_orders[:current_orders_num + 1, 2], current_orders[:current_orders_num + 1, 3] = new_remaining_time, new_total_travel_time
         current_orders_num += 1
+        current_orders[:current_orders_num, 2], current_orders[:current_orders_num, 3] = new_remaining_time, new_total_travel_time
         current_travel_route, current_travel_time = new_route, new_route_time
 
     # 3. run 1 minute
