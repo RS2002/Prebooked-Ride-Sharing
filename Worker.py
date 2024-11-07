@@ -49,13 +49,14 @@ def norm(order_state, worker_state, history_order_state, lat_min = 40.6887842155
 
 
 class Buffer():
-    def __init__(self,capacity = 1e5):
+    def __init__(self,capacity = 1e5, episode_capacity = 10):
         super().__init__()
-        self.reset(capacity)
+        self.reset(capacity, episode_capacity)
 
-    def reset(self, capacity = None):
+    def reset(self, capacity = None, episode_capacity = None):
         if capacity is not None:
             self.capacity = capacity
+            self.episode_capacity = episode_capacity
 
         self.num = 0
 
@@ -78,6 +79,26 @@ class Buffer():
         self.episode = []
 
     def append(self, experience, episode=0):
+        if self.num > 0 and self.episode[0]<episode-self.episode_capacity:
+            episode_np = np.array(self.episode)
+            old_record_num = len(episode_np[episode_np<(episode-self.episode_capacity)])
+            self.num -= old_record_num
+            self.worker_state = self.worker_state[old_record_num:]
+            self.order_state = self.order_state[old_record_num:]
+            self.order_num = self.order_num[old_record_num:]
+            self.action = self.action[old_record_num:]
+            self.delta_t = self.delta_t[old_record_num:]
+            self.worker_state_next = self.worker_state_next[old_record_num:]
+            self.order_state_next = self.order_state_next[old_record_num:]
+            self.order_num_next = self.order_num_next[old_record_num:]
+            self.action_next = self.action_next[old_record_num:]
+            self.reward = self.reward[old_record_num:]
+            self.episode = self.episode[old_record_num:]
+            if self.episode[0]<episode-self.episode_capacity:
+                print("Buffer Error!")
+                exit(-1)
+
+
         state, action, delta_t, reward, state_next, action_next = experience
         if self.num == self.capacity:
             self.worker_state = self.worker_state[1:]
@@ -107,11 +128,17 @@ class Buffer():
         self.episode.append(episode)
 
     def sample(self,size,device):
-        # indices = np.random.randint(0, self.num, size=size)
-        priority = np.array(self.episode)
-        priority = priority - np.min(priority) + 1
-        probabilities = np.array(priority) / np.sum(priority)
-        indices = np.random.choice(self.num, size, p=probabilities)
+        if self.num<10:
+            return None,None,None,None,None,None,None,None,None,None
+
+        if size>self.num:
+            size = self.num
+
+        indices = np.random.randint(0, self.num, size=size)
+        # priority = np.array(self.episode)
+        # priority = priority - np.min(priority) + 1
+        # probabilities = np.array(priority) / np.sum(priority)
+        # indices = np.random.choice(self.num, size, p=probabilities)
 
         worker_state = torch.tensor([self.worker_state[i] for i in indices]).to(device)
         order_state = torch.tensor([self.order_state[i] for i in indices]).to(device)
@@ -242,23 +269,56 @@ class Worker():
         self.experience = [[] for _ in range(self.num)]
         self.experience_pre = [[] for _ in range(self.num)]
 
-    def observe(self, network, order, current_time, exploration_rate=0):
+        # some logs
+        self.idle_time = np.zeros([self.num])
+
+    def observe(self, network, order, current_time, order_future = None, exploration_rate=0):
         # 0. process order state
         pid = order['PULocationID']
         did = order['DOLocationID']
-        pid = self.zone_map[pid-1]
-        did = self.zone_map[did-1]
-        minute = order['minute']
-        type = order['type']
-        plat, plon = self.coordinate_lookup_lat[pid], self.coordinate_lookup_lon[pid]
-        dlat, dlon = self.coordinate_lookup_lat[did], self.coordinate_lookup_lon[did]
-        minute = np.array(minute).reshape(-1,1)
-        plat = np.array(plat).reshape(-1,1)
-        plon = np.array(plon).reshape(-1,1)
-        dlat = np.array(dlat).reshape(-1,1)
-        dlon = np.array(dlon).reshape(-1,1)
-        type = np.array(type).reshape(-1,1)
-        order = np.concatenate([plat,plon,dlat,dlon,minute,type],axis=-1)
+        if len(pid) == 0:
+            order = None
+        else:
+            pid = self.zone_map[pid-1]
+            did = self.zone_map[did-1]
+            minute = order['minute']
+            type = order['type']
+            plat, plon = self.coordinate_lookup_lat[pid], self.coordinate_lookup_lon[pid]
+            dlat, dlon = self.coordinate_lookup_lat[did], self.coordinate_lookup_lon[did]
+            minute = np.array(minute).reshape(-1,1)
+            plat = np.array(plat).reshape(-1,1)
+            plon = np.array(plon).reshape(-1,1)
+            dlat = np.array(dlat).reshape(-1,1)
+            dlon = np.array(dlon).reshape(-1,1)
+            type = np.array(type).reshape(-1,1)
+            order = np.concatenate([plat,plon,dlat,dlon,minute,type],axis=-1)
+
+        if order_future is not None:
+            pid = order_future['PULocationID']
+            did = order_future['DOLocationID']
+            if len(pid) != 0:
+                pid = self.zone_map[pid - 1]
+                did = self.zone_map[did - 1]
+                minute = order_future['minute'] + 60
+                type = order_future['type']
+                plat, plon = self.coordinate_lookup_lat[pid], self.coordinate_lookup_lon[pid]
+                dlat, dlon = self.coordinate_lookup_lat[did], self.coordinate_lookup_lon[did]
+                minute = np.array(minute).reshape(-1, 1)
+                plat = np.array(plat).reshape(-1, 1)
+                plon = np.array(plon).reshape(-1, 1)
+                dlat = np.array(dlat).reshape(-1, 1)
+                dlon = np.array(dlon).reshape(-1, 1)
+                type = np.array(type).reshape(-1, 1)
+                order_future = np.concatenate([plat, plon, dlat, dlon, minute, type], axis=-1)
+                if order is not None:
+                    order = np.concatenate([order, order_future], axis = 0)
+                else:
+                    order = order_future
+
+        if order is None or len(order) == 0:
+            return None, None
+        elif len(order)>self.num:
+            order = order[:self.num]
 
         torch.set_grad_enabled(False)
         # 1. calculate q-value
@@ -280,6 +340,8 @@ class Worker():
         loss_list = []
         for _ in pbar:
             worker_state, order_state, order_num, action, delta_t, reward, worker_state_next, order_state_next, order_num_next, action_next = buffer.sample(batch_size,self.device)
+            if worker_state is None:
+                return -1
             x1,x2,x3 = norm(action,worker_state,order_state)
             x1_next,x2_next,x3_next = norm(action_next,worker_state_next, order_state_next)
 
@@ -311,7 +373,7 @@ class Worker():
 
             optim.step()
             loss_list.append(loss.item())
-        schedule.step()
+        # schedule.step()
         return np.mean(loss_list)
 
     def update_pre(self, assignment, order_pre):
@@ -334,6 +396,9 @@ class Worker():
 
         for i in range(len(results)):
             self.observe_space[i], self.current_orders[i], self.current_order_num[i], self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i] = results[i][0], results[i][1], results[i][2], results[i][3], results[i][4], results[i][5], results[i][6]
+
+            if self.current_order_num[i] == 0:
+                self.idle_time[i] += 1
 
             if self.is_train:
                 if results[i][7] is not None:

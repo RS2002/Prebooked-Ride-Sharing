@@ -28,8 +28,12 @@ class Demand():
         self.filtered_demand_pre = demand_pre.sample(frac=pre_sample)
         self.filtered_demand = self.filtered_demand.drop(self.filtered_demand_pre.index)
         self.filtered_demand, self.filtered_demand_pre = self.filtered_demand.sort_index(), self.filtered_demand_pre.sort_index()
-        self.filtered_demand['type'] = np.random.choice([0, 1], size=len(self.filtered_demand), p=[p_pooling, 1 - p_pooling])
-        self.filtered_demand_pre['type'] = np.random.choice([0, 1], size=len(self.filtered_demand_pre), p=[p_pooling_pre, 1 - p_pooling_pre])
+
+        # self.filtered_demand['type'] = np.random.choice([0, 1], size=len(self.filtered_demand), p=[p_pooling, 1 - p_pooling])
+        # self.filtered_demand_pre['type'] = np.random.choice([0, 1], size=len(self.filtered_demand_pre), p=[p_pooling_pre, 1 - p_pooling_pre])
+        self.filtered_demand['type'] = self.get_type(len(self.filtered_demand), p_pooling)
+        self.filtered_demand_pre['type'] = self.get_type(len(self.filtered_demand_pre), p_pooling_pre)
+
 
         ondemand_pooling = (self.filtered_demand['type'] == 0).sum()
         ondemand_nonpooling = (self.filtered_demand['type'] == 1).sum()
@@ -44,7 +48,21 @@ class Demand():
         self.current_time = start_time
         self.num_lost_demand = 0
         self.wait_time = wait_time
+
+        # self.future_demand = self.demand[(self.demand["day"]==day) & (self.demand["hour"]==hour+1) & (self.demand["minute"]<=30)]
+        # self.future_demand = demand_pre.sample(frac=pre_sample)
+        # # self.future_demand['type'] = np.random.choice([0, 1], size=len(self.future_demand), p=[p_pooling_pre, 1 - p_pooling_pre])
+        # self.future_demand['type'] = self.get_type(len(self.future_demand), p_pooling_pre)
+
+
         return ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling
+
+    def get_type(self,length,pooling_rate):
+        num_zeros = int(pooling_rate * length)
+        num_ones = length - num_zeros
+        array = np.array([0] * num_zeros + [1] * num_ones)
+        np.random.shuffle(array)
+        return array
 
     '''
     update the order in the next minute
