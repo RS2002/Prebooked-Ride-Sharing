@@ -8,6 +8,8 @@ import pickle
 import numpy as np
 import random
 
+
+
 def get_args():
     parser = argparse.ArgumentParser(description='')
 
@@ -81,8 +83,13 @@ def main():
     j = args.init_episode
     exploration_rate = max(exploration_rate * (epsilon_decay_rate**j), epsilon_final)
 
+    exploration_rate_on = exploration_rate
+    exploration_rate_pre = exploration_rate
+
     prebooked_rate = args.prebooked_rate
     pooling_rate = args.pooling_rate
+
+    train_pre = True
 
     while True:
         j += 1
@@ -105,19 +112,44 @@ def main():
         # else:
         #     exploration_rate_temp = 0
 
-        exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        exploration_rate_temp = exploration_rate
+        # exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        # exploration_rate_temp = exploration_rate
 
-        print("Exploration Rate: ", exploration_rate_temp)
+        # if j % 4 == 1:
+        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        #     exploration_rate_temp1 = exploration_rate
+        #     exploration_rate_temp2 = exploration_rate
+        # elif j % 4 == 2:
+        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        #     exploration_rate_temp1 = 0
+        #     exploration_rate_temp2 = exploration_rate
+        # elif j % 4 == 3:
+        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
+        #     exploration_rate_temp1 = 0
+        #     exploration_rate_temp2 = exploration_rate
+        # else:
+        #     exploration_rate_temp1 = 0
+        #     exploration_rate_temp2 = 0
+
+        if train_pre:
+            exploration_rate_pre = max(exploration_rate_pre * epsilon_decay_rate, epsilon_final)
+            exploration_rate_temp1 = exploration_rate_pre
+            exploration_rate_temp2 = 0
+        else:
+            exploration_rate_temp1 = 0
+            exploration_rate_on = max(exploration_rate_on * epsilon_decay_rate, epsilon_final)
+            exploration_rate_temp2 = exploration_rate_on
+
+        print("Exploration Rate: ", exploration_rate_temp1, exploration_rate_temp2)
         pbar = tqdm.tqdm(range(args.max_step))
         for t in pbar:
-            q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t, None, exploration_rate_temp)
+            q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t, None, exploration_rate_temp1)
             if order_pre is not None:
                 assignment_pre, _ = assign(q_value)
             else:
                 assignment_pre = [None] * worker.num
             observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)
-            q_value, order = worker.observe(worker.Q_training, demand.current_demand, t, None, exploration_rate_temp)
+            q_value, order = worker.observe(worker.Q_training, demand.current_demand, t, None, exploration_rate_temp2)
             if order is not None:
                 assignment, _ = assign(q_value)
             else:
@@ -126,9 +158,19 @@ def main():
             worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
-        loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
-        loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
-        worker.update_Qtarget()
+
+        # loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
+        # loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
+        # worker.update_Qtarget()
+
+        if train_pre:
+            loss = 0
+            loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
+            worker.update_Q_pre()
+        else:
+            loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
+            loss_pre = 0
+            worker.update_Q_on()
 
         total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
         Pickup_Num = np.array(platform.Pickup_Num)
@@ -183,10 +225,14 @@ def main():
         with open('train.pkl', 'wb') as f:
             pickle.dump(train_list, f)
 
-        if j % (2*args.eval_episode) == 0:
-            worker.update_Qtarget(1.0)
+        # if j % (2*args.eval_episode) == 0:
+        #     worker.update_Qtarget(1.0)
 
         if j % args.eval_episode == 0:
+            train_pre = not train_pre
+            buffer.reset()
+            buffer_pre.reset()
+
             worker.reset(train=False)
             platform.reset(discount_factor=args.gamma)
 

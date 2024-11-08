@@ -79,24 +79,24 @@ class Buffer():
         self.episode = []
 
     def append(self, experience, episode=0):
-        if self.num > 0 and self.episode[0]<episode-self.episode_capacity:
-            episode_np = np.array(self.episode)
-            old_record_num = len(episode_np[episode_np<(episode-self.episode_capacity)])
-            self.num -= old_record_num
-            self.worker_state = self.worker_state[old_record_num:]
-            self.order_state = self.order_state[old_record_num:]
-            self.order_num = self.order_num[old_record_num:]
-            self.action = self.action[old_record_num:]
-            self.delta_t = self.delta_t[old_record_num:]
-            self.worker_state_next = self.worker_state_next[old_record_num:]
-            self.order_state_next = self.order_state_next[old_record_num:]
-            self.order_num_next = self.order_num_next[old_record_num:]
-            self.action_next = self.action_next[old_record_num:]
-            self.reward = self.reward[old_record_num:]
-            self.episode = self.episode[old_record_num:]
-            if self.episode[0]<episode-self.episode_capacity:
-                print("Buffer Error!")
-                exit(-1)
+        # if self.num > 0 and self.episode[0]<episode-self.episode_capacity:
+        #     episode_np = np.array(self.episode)
+        #     old_record_num = len(episode_np[episode_np<(episode-self.episode_capacity)])
+        #     self.num -= old_record_num
+        #     self.worker_state = self.worker_state[old_record_num:]
+        #     self.order_state = self.order_state[old_record_num:]
+        #     self.order_num = self.order_num[old_record_num:]
+        #     self.action = self.action[old_record_num:]
+        #     self.delta_t = self.delta_t[old_record_num:]
+        #     self.worker_state_next = self.worker_state_next[old_record_num:]
+        #     self.order_state_next = self.order_state_next[old_record_num:]
+        #     self.order_num_next = self.order_num_next[old_record_num:]
+        #     self.action_next = self.action_next[old_record_num:]
+        #     self.reward = self.reward[old_record_num:]
+        #     self.episode = self.episode[old_record_num:]
+        #     if self.episode[0]<episode-self.episode_capacity:
+        #         print("Buffer Error!")
+        #         exit(-1)
 
 
         state, action, delta_t, reward, state_next, action_next = experience
@@ -223,6 +223,13 @@ class Worker():
         for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
             target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
+    def update_Q_on(self, tau=0.005):
+        for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
+            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
+
+    def update_Q_pre(self, tau=0.005):
+        for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
+            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
     def reset(self, capacity = 3, train=True):
         if train:
