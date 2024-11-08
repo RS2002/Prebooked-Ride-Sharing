@@ -1,6 +1,6 @@
 # D³QN
 
-**Article: ** "Ride-hailing Vehicle Dispatching with a Mixture of On-demand and Pre-booked Requests: A Deep Reinforcement Learning Approach"
+**Article:** "Ride-hailing Vehicle Dispatching with a Mixture of On-demand and Pre-booked Requests: A Deep Reinforcement Learning Approach"
 
 
 
