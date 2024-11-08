@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=500)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=1e5)
+    parser.add_argument('--buffer_capacity', type=int, default=3e5)
     parser.add_argument('--buffer_episode', type=int, default=10)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_rate', type=float, default=0.20)
@@ -29,7 +29,7 @@ def get_args():
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
-    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[15.0,1.0,2.0,1.0,0.0,5.0])
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[15.0,1.0,2.0,1.0,0.0,5.0,3.0])
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
