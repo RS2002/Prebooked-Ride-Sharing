@@ -278,6 +278,10 @@ class Worker():
 
         # some logs
         self.idle_time = np.zeros([self.num])
+        self.max_ultilization_rate = 0
+        self.waiting_time_list = []
+        self.waiting_time = np.zeros([self.num])
+        self.start_flag = np.zeros([self.num])
 
     def observe(self, network, order, current_time, order_future = None, exploration_rate=0):
         # 0. process order state
@@ -406,6 +410,14 @@ class Worker():
 
             if self.current_order_num[i] == 0:
                 self.idle_time[i] += 1
+                self.waiting_time[i] += 1
+
+            if assign_state_table[i] != 0:
+                if self.start_flag[i] == 0:
+                    self.start_flag[i] = 1
+                else:
+                    self.waiting_time_list.append(self.waiting_time[i])
+                self.waiting_time[i] = 0
 
             if self.is_train:
                 if results[i][7] is not None:
@@ -426,6 +438,9 @@ class Worker():
                     self.experience_pre[i].append(self.experience_pre[i][1])
                     self.buffer_pre.append(self.experience_pre[i], episode)
 
+        ultilization_rate = np.sum(self.current_order_num!=0) / self.num
+        if ultilization_rate > self.max_ultilization_rate:
+            self.max_ultilization_rate = ultilization_rate
 
 def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route ,new_route_time ,new_remaining_time ,new_total_travel_time, assign_state):
     full_experience = None

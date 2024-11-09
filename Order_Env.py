@@ -46,7 +46,10 @@ class Demand():
         self.current_demand = self.filtered_demand.loc[self.filtered_demand['minute'] == start_time].reset_index(drop=True)
         self.current_demand_pre = self.filtered_demand_pre.copy().reset_index(drop=True)
         self.current_time = start_time
-        self.num_lost_demand = 0
+
+        self.num_lost_demand_pooling = 0
+        self.num_lost_demand_nonpooling = 0
+
         self.wait_time = wait_time
 
         # self.future_demand = self.demand[(self.demand["day"]==day) & (self.demand["hour"]==hour+1) & (self.demand["minute"]<=30)]
@@ -75,7 +78,10 @@ class Demand():
         self.current_demand = self.current_demand.reset_index(drop=True)
         # drop those orders that are not taken over <wait_time> minutes
         if self.current_time >= self.wait_time:
-            self.num_lost_demand += len(self.current_demand[self.current_demand['minute'] <= (self.current_time - self.wait_time)])
+            # self.num_lost_demand += len(self.current_demand[self.current_demand['minute'] <= (self.current_time - self.wait_time)])
+            self.num_lost_demand_pooling += len(self.current_demand[(self.current_demand['minute'] <= (self.current_time - self.wait_time)) & (self.current_demand['type'] == 0)])
+            self.num_lost_demand_nonpooling += len(self.current_demand[(self.current_demand['minute'] <= (self.current_time - self.wait_time)) & (self.current_demand['type'] == 1)])
+
             self.current_demand = self.current_demand.drop(
                 index=self.current_demand[self.current_demand['minute'] <= (self.current_time - self.wait_time)].index).reset_index(
                 drop=True)

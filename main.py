@@ -90,6 +90,7 @@ def main():
     pooling_rate = args.pooling_rate
 
     train_pre = True
+    rand_prop = False
 
     while True:
         j += 1
@@ -97,11 +98,14 @@ def main():
         platform.reset(discount_factor=args.gamma)
 
         # day = random.randint(1, 30)
-        # pre_sample = random.random()
-        # p_pooling = random.random()
-        # print("Pre-booked Rate: {:} , Pooling Rate: {:}".format(pre_sample,p_pooling))
-        pre_sample = prebooked_rate
-        p_pooling = pooling_rate
+
+        if rand_prop:
+            pre_sample = random.random()
+            p_pooling = random.random()
+            print("Pre-booked Rate: {:} , Pooling Rate: {:}".format(pre_sample,p_pooling))
+        else:
+            pre_sample = prebooked_rate
+            p_pooling = pooling_rate
         ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, p_pooling_pre = p_pooling, wait_time = args.order_max_wait_time)
 
         # explore_threshold = 0.7
@@ -173,6 +177,9 @@ def main():
             worker.update_Q_on()
 
         total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
+        drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
+        drop_demand_rate = drop_demand / total_demand[2:]
+        max_ultilization_rate = worker.max_ultilization_rate
         Pickup_Num = np.array(platform.Pickup_Num)
         Detour = np.array(platform.Detour)
         Overtime_num = np.array(platform.Overtime_num)
@@ -184,7 +191,8 @@ def main():
         reward = platform.Total_Reward / args.worker_num
         reward_pre = platform.Total_Reward_Pre / args.worker_num
 
-        idle_time = worker.idle_time
+        # idle_time = worker.idle_time
+        idle_time = worker.waiting_time_list
         idle_time = np.mean(idle_time)
         pickup_time = np.array(platform.Pickup_Time)
         pickup_time = pickup_time / Pickup_Num
@@ -194,11 +202,12 @@ def main():
         swap_rate = platform.Swap / (platform.Assigment + 1e-8)
 
 
-        print("Train Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:} , Idle Time {:}, Swap Rate {:} , On-demand Loss {:}, Pre-booked Loss {:}".format(j, reward, reward_pre,total_reward,idle_time, swap_rate, loss, loss_pre))
-        print("Service Rate:", service_rate)
-        print("Average Detour:", average_detour)
-        print("Overtime Rate:", overtime_rate)
-        print("Average Overtime:", overtime_average)
+        print("Train Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Ultilizationb Rate {:}, Swap Rate {:},  On-demand Loss {:}, Pre-booked Loss {:}".format(j, reward, reward_pre,total_reward,idle_time, max_ultilization_rate, swap_rate, loss, loss_pre))
+        print("Service Rate: ", service_rate)
+        print("Loss Demand: ", drop_demand_rate)
+        print("Average Detour: ", average_detour)
+        print("Overtime Rate: ", overtime_rate)
+        print("Average Overtime: ", overtime_average)
         print("Pickup Time: ", pickup_time)
         print("Unit Reward: ", unit_reward)
         print()
@@ -206,6 +215,8 @@ def main():
         dic = {
             'episode': j,
             'service_rate': service_rate,
+            'drop_demand_rate': drop_demand_rate,
+            'max_ultilization_rate': max_ultilization_rate,
             'average_detour': average_detour,
             'overtime_rate': overtime_rate,
             'overtime_average': overtime_average,
@@ -275,6 +286,9 @@ def main():
 
             total_demand = np.array(
                 [prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling])  # + 1e-8
+            drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
+            drop_demand_rate = drop_demand / total_demand[2:]
+            max_ultilization_rate = worker.max_ultilization_rate
             Pickup_Num = np.array(platform.Pickup_Num)
             Detour = np.array(platform.Detour)
             Overtime_num = np.array(platform.Overtime_num)
@@ -286,7 +300,8 @@ def main():
             reward = platform.Total_Reward / args.worker_num
             reward_pre = platform.Total_Reward_Pre / args.worker_num
 
-            idle_time = worker.idle_time
+            # idle_time = worker.idle_time
+            idle_time = worker.waiting_time_list
             idle_time = np.mean(idle_time)
             pickup_time = np.array(platform.Pickup_Time)
             pickup_time = pickup_time / Pickup_Num
@@ -294,20 +309,22 @@ def main():
             total_reward = np.sum(type_reward) / args.worker_num
             unit_reward = type_reward / Pickup_Num
             swap_rate = platform.Swap / (platform.Assigment + 1e-8)
-
             print(
-                "Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:} , Idle Time {:}, Swap Rate {:}".format(
-                    j, reward, reward_pre, total_reward, idle_time, swap_rate))
-            print("Service Rate:", service_rate)
-            print("Average Detour:", average_detour)
-            print("Overtime Rate:", overtime_rate)
-            print("Average Overtime:", overtime_average)
+                "Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Ultilizationb Rate {:}, Swap Rate {:}".format(
+                    j, reward, reward_pre, total_reward, idle_time, max_ultilization_rate, swap_rate))
+            print("Service Rate: ", service_rate)
+            print("Loss Demand: ", drop_demand_rate)
+            print("Average Detour: ", average_detour)
+            print("Overtime Rate: ", overtime_rate)
+            print("Average Overtime: ", overtime_average)
             print("Pickup Time: ", pickup_time)
             print("Unit Reward: ", unit_reward)
-            worker.save("latest.pth", "latest_pre.pth")
+            print()
             dic = {
                 'episode': j,
                 'service_rate': service_rate,
+                'drop_demand_rate': drop_demand_rate,
+                'max_ultilization_rate': max_ultilization_rate,
                 'average_detour': average_detour,
                 'overtime_rate': overtime_rate,
                 'overtime_average': overtime_average,
