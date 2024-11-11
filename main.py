@@ -8,8 +8,6 @@ import pickle
 import numpy as np
 import random
 
-
-
 def get_args():
     parser = argparse.ArgumentParser(description='')
 
@@ -31,6 +29,12 @@ def get_args():
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
     parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[15.0,1.0,2.0,1.0,0.0,5.0,3.0])
 
+    parser.add_argument("--prebook_start", type=int, default=0)
+    parser.add_argument("--prebook_end", type=int, default=10)
+    parser.add_argument("--rand_rate", action="store_true",default=False)
+    parser.add_argument("--rand_appear", action="store_true",default=False)
+
+
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
     parser.add_argument('--eval_episode', type=int, default=10)
@@ -48,8 +52,8 @@ def get_args():
     parser.add_argument("--model_path",type=str,default=None)
     parser.add_argument("--model_pre_path",type=str,default=None)
 
-    parser.add_argument("--demand_path",type=str,default="./data/yellow_tripdata_2024-07.parquet")
-    parser.add_argument("--zone_dic_path",type=str,default="./data/Manhattan_dic.pkl")
+    parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
+    parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")
 
     args = parser.parse_args()
     return args
@@ -90,14 +94,13 @@ def main():
     pooling_rate = args.pooling_rate
 
     train_pre = True
-    rand_prop = False
+    rand_prop = args.rand_rate
+    rand_appear = args.rand_appear
 
     while True:
         j += 1
         worker.reset(train=True)
         platform.reset(discount_factor=args.gamma)
-
-        # day = random.randint(1, 30)
 
         if rand_prop:
             pre_sample = random.random()
@@ -106,34 +109,18 @@ def main():
         else:
             pre_sample = prebooked_rate
             p_pooling = pooling_rate
-        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, p_pooling_pre = p_pooling, wait_time = args.order_max_wait_time)
 
-        # explore_threshold = 0.7
-        # rand = random.random()
-        # if rand <= explore_threshold:
-        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        #     exploration_rate_temp = exploration_rate
-        # else:
-        #     exploration_rate_temp = 0
+        if rand_appear:
+            prebook_start = random.randint(0, 10)
+            prebook_end = random.randint(prebook_start,20)
+            print("Pre-booked Start Time: {:} , End Time: {:}".format(prebook_start,prebook_end))
+        else:
+            prebook_start = args.prebook_start
+            prebook_end = args.prebook_end
 
-        # exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        # exploration_rate_temp = exploration_rate
+        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time)
 
-        # if j % 4 == 1:
-        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        #     exploration_rate_temp1 = exploration_rate
-        #     exploration_rate_temp2 = exploration_rate
-        # elif j % 4 == 2:
-        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        #     exploration_rate_temp1 = 0
-        #     exploration_rate_temp2 = exploration_rate
-        # elif j % 4 == 3:
-        #     exploration_rate = max(exploration_rate * epsilon_decay_rate, epsilon_final)
-        #     exploration_rate_temp1 = 0
-        #     exploration_rate_temp2 = exploration_rate
-        # else:
-        #     exploration_rate_temp1 = 0
-        #     exploration_rate_temp2 = 0
+
 
         if train_pre:
             exploration_rate_pre = max(exploration_rate_pre * epsilon_decay_rate, epsilon_final)
@@ -143,6 +130,7 @@ def main():
             exploration_rate_temp1 = 0
             exploration_rate_on = max(exploration_rate_on * epsilon_decay_rate, epsilon_final)
             exploration_rate_temp2 = exploration_rate_on
+
 
         print("Exploration Rate: ", exploration_rate_temp1, exploration_rate_temp2)
         pbar = tqdm.tqdm(range(args.max_step))
@@ -162,10 +150,6 @@ def main():
             worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
-
-        # loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
-        # loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
-        # worker.update_Qtarget()
 
         if train_pre:
             loss = 0
@@ -247,18 +231,18 @@ def main():
             worker.reset(train=False)
             platform.reset(discount_factor=args.gamma)
 
-            # day = random.randint(1, 30)
-            # pre_sample = 0.2
-            # p_pooling = 0.8
             pre_sample = prebooked_rate
             p_pooling = pooling_rate
+            prebook_start = args.prebook_start
+            prebook_end = args.prebook_end
 
             ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=7,
                                                                                                           start_time=0,
                                                                                                           pre_sample=pre_sample,
                                                                                                           p_sample=args.demand_sample_rate,
                                                                                                           p_pooling=p_pooling,
-                                                                                                          p_pooling_pre=p_pooling,
+                                                                                                          prebook_start = prebook_start,
+                                                                                                          prebook_end = prebook_end,
                                                                                                           wait_time=args.order_max_wait_time)
             print("Exploration Rate: ", 0)
             pbar = tqdm.tqdm(range(args.max_step))
