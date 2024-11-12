@@ -10,6 +10,8 @@ The detail of the network structure can be found in [Double-PDF](https://github.
 
 ## 1. Workflow
 
+![](./img/main.png)
+
 
 
 ## 2. Preparation
