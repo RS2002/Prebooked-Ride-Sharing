@@ -157,7 +157,8 @@ reward_parameter_list:
 2 -- punishment scale 1 (used for those have been already over time)
 3 -- conflict punishment (for on-demand agent)
 4 -- indirect reward rate (for pre-booked agent)
-5 -- punishment scale 2 (for real over time)
+5 -- punishment scale 2 (for real over time (not get served) )
+5 -- punishment scale 3 (for real over time (get served) )
 '''
 def excute(observe_pre, order_pre, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
     assign_state = 0 # 0: no action, 1: pick up pre-booked order, 2: pick up on-demand order
