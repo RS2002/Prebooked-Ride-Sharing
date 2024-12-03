@@ -53,8 +53,10 @@ class Platform():
         self.Total_Reward_Pre = 0
 
         self.Pickup_Num = [0]*4 # total picking up order numbers of four types
-        self.Pickup_Time = [0]*4 # total picking up order numbers of four types
-        self.Detour = [0]*4 # total picking up order numbers of four types
+        self.Pickup_Time = [0]*4
+        self.Waiting_Time = [0]*4
+        self.Confirmation_Time = [0]*2
+        self.Detour = [0]*4
         self.Overtime_num = [0]*2 # total overtime pre-booked order amounts of two types
         self.Overtime = [0]*2 # total overtime of two types
         self.Reward = [0]*4 # total reward of each type
@@ -96,13 +98,14 @@ class Platform():
             assign_state = result[5]
             if assign_state == 1:
                 accepted_pre.append(assignment_pre[i])
-                overtime = log["pickup"]
+                overtime = log["wait"]
                 pickup_time = log["pickup"]
                 overtime_num = int(overtime>0)
                 workload = log["workload"]
                 direct = log["direct"]
                 r = log["reward"]
-                detour = workload - direct
+                waiting_time = log["wait"]
+                detour = log["detour"]
                 if order_pre[i][5] == 0: # pooling
                     self.Pickup_Num[0] += 1
                     self.Pickup_Time[0] += pickup_time
@@ -110,6 +113,7 @@ class Platform():
                     self.Overtime[0] += overtime
                     self.Overtime_num[0] += overtime_num
                     self.Reward[0] += r
+                    self.Waiting_Time[0] += waiting_time
                 elif order_pre[i][5] == 1: # non pooling
                     self.Pickup_Num[1] += 1
                     self.Pickup_Time[1] += pickup_time
@@ -117,6 +121,7 @@ class Platform():
                     self.Overtime[1] += overtime
                     self.Overtime_num[1] += overtime_num
                     self.Reward[1] += r
+                    self.Waiting_Time[1] += waiting_time
                 else:
                     print("Pre-booked Error")
                     exit(-1)
@@ -127,17 +132,23 @@ class Platform():
                 workload = log["workload"]
                 direct = log["direct"]
                 r = log["reward"]
-                detour = workload - direct
+                waiting_time = log["wait"]
+                detour = log["detour"]
+                confirmation_time = log["confirmation"]
                 if new_orders_state[assignment[i]][5] == 0: # pooling
                     self.Pickup_Num[2] += 1
                     self.Pickup_Time[2] += pickup_time
                     self.Detour[2] += detour
                     self.Reward[2] += r
+                    self.Waiting_Time[2] += waiting_time
+                    self.Confirmation_Time[0] += confirmation_time
                 elif new_orders_state[assignment[i]][5] == 1: # non pooling
                     self.Pickup_Num[3] += 1
                     self.Pickup_Time[3] += pickup_time
                     self.Detour[3] += detour
                     self.Reward[3] += r
+                    self.Waiting_Time[3] += waiting_time
+                    self.Confirmation_Time[1] += confirmation_time
                 else:
                     print("On-demand Error")
                     exit(-1)
@@ -157,8 +168,7 @@ reward_parameter_list:
 2 -- punishment scale 1 (used for those have been already over time)
 3 -- conflict punishment (for on-demand agent)
 4 -- indirect reward rate (for pre-booked agent)
-5 -- punishment scale 2 (for real over time (not get served) )
-5 -- punishment scale 3 (for real over time (get served) )
+5 -- punishment scale 2 (for real over time)
 '''
 def excute(observe_pre, order_pre, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
     assign_state = 0 # 0: no action, 1: pick up pre-booked order, 2: pick up on-demand order
@@ -252,9 +262,11 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     reward_pre += reward_pick
 
                     log["reward"] = reward_pick
-                    log["pickup"] = pick_pre_time2
+                    log["wait"] = pick_pre_time2
+                    log["pickup"] = pick_pre_time
                     log["workload"] = pick_pre_time + np.max(new_time) - np.max(current_order_state[:, 2])
-                    log["direct"] = direct_time[0]
+                    log["direct"] = pick_pre_time + direct_time[0]
+                    log["detour"] = new_time[-1] - direct_time[0]
 
                     return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], pick_pre_time], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log  # in this circumstance, the assignment must be None
                 else:
@@ -286,9 +298,11 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                         reward_pre += reward_pick
 
                         log["reward"] = reward_pick
-                        log["pickup"] = pick_pre_time2
-                        log["workload"] = new_total_travel_time[0]
-                        log["direct"] = new_time[0]
+                        log["wait"] = pick_pre_time2
+                        log["pickup"] = pick_pre_time
+                        log["workload"] = pick_pre_time + new_time[0]
+                        log["direct"] = pick_pre_time +  new_time[0]
+                        log["detour"] = 0
 
                         return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], pick_pre_time], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log  # in this circumstance, the assignment must be None
                     else:
@@ -372,9 +386,12 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
             reward_pre += reward * reward_parameter_list[4]
 
         log["reward"] = reward
-        log["pickup"] = pickup_time2
+        log["confirmation"] = waiting_time
+        log["wait"] = pickup_time2
+        log["pickup"] = pickup_time
         log["workload"] = pickup_time + np.max(new_time) - np.max(current_order_state[:, 2])
-        log["direct"] = direct_time
+        log["direct"] = pickup_time + direct_time
+        log["detour"] = new_time[-1] - direct_time
 
         return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], new_orders_state[assignment], current_time],[reward_pre,reward], pickup_time], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log
 

@@ -36,7 +36,6 @@ def get_args():
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
-    parser.add_argument('--eval_episode', type=int, default=10)
 
     parser.add_argument('--epsilon', type=float, default=1.0)
     parser.add_argument('--epsilon_decay_rate', type=float, default=0.99)
@@ -152,6 +151,12 @@ def main():
                 idle_time = np.mean(idle_time)
                 pickup_time = np.array(platform.Pickup_Time)
                 pickup_time = pickup_time / Pickup_Num
+
+                waiting_time = np.array(platform.Waiting_Time)
+                waiting_time = waiting_time / Pickup_Num
+                confirmation_time = np.array(platform.Confirmation_Time)
+                confirmation_time = confirmation_time / Pickup_Num[2:]
+
                 type_reward = np.array(platform.Reward)
                 total_reward = np.sum(type_reward) / args.worker_num
                 unit_reward = type_reward / Pickup_Num
@@ -162,9 +167,11 @@ def main():
                 print("Service Rate: ", service_rate)
                 print("Loss Demand: ", drop_demand_rate)
                 print("Average Detour: ", average_detour)
+                print("Pickup Time: ", pickup_time)
+                print("Waiting Time: ", waiting_time)
+                print("Confirmation Time: ", confirmation_time)
                 print("Overtime Rate: ", overtime_rate)
                 print("Average Overtime: ", overtime_average)
-                print("Pickup Time: ", pickup_time)
                 print("Unit Reward: ", unit_reward)
                 print()
                 dic = {
@@ -186,7 +193,9 @@ def main():
                     "total_demand": total_demand,
                     "pickup_num": Pickup_Num,
                     "prebook_start": prebook_start,
-                    "prebook_end": prebook_end
+                    "prebook_end": prebook_end,
+                    "waiting_time": waiting_time,
+                    "confirmation_time": confirmation_time
                 }
 
                 dic_list.append(dic)
