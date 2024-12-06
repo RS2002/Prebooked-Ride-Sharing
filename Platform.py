@@ -266,7 +266,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     log["pickup"] = pick_pre_time
                     log["workload"] = pick_pre_time + np.max(new_time) - np.max(current_order_state[:, 2])
                     log["direct"] = pick_pre_time + direct_time[0]
-                    log["detour"] = new_time[-1] - direct_time[0]
+                    log["detour"] = new_time[-1] - direct_time[0] + np.sum(new_time[:-1]) - np.sum(current_order_state[:, 2]) + pick_pre_time * current_order_num
 
                     return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], pick_pre_time], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log  # in this circumstance, the assignment must be None
                 else:
@@ -391,7 +391,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
         log["pickup"] = pickup_time
         log["workload"] = pickup_time + np.max(new_time) - np.max(current_order_state[:, 2])
         log["direct"] = pickup_time + direct_time
-        log["detour"] = new_time[-1] - direct_time
+        log["detour"] = new_time[-1] - direct_time + np.sum(new_time[:-1]) - np.sum(current_order_state[:, 2]) + pickup_time * current_order_num
 
         return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], new_orders_state[assignment], current_time],[reward_pre,reward], pickup_time], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log
 
