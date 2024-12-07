@@ -147,7 +147,7 @@ def get_map(route,originpoint, destinationpoints,m):#real_dests
 if __name__ == '__main__':
     # test
     origin_point = (40.77876573980772, -73.9510100659439)
-    destination_points = [(40.72375208451233, -73.97696827424141), (40.804333857858566,  -73.95129204385638)]
+    destination_points = [(40.72375208451233, -73.97696827424141), (40.804333857858566,  -73.95129204385638), (40.804333857858566,  -73.99129204385638)]
     route, route_t, t, dis = TSP_route(origin_point, destination_points)
 
     print(route)
