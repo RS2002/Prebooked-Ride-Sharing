@@ -322,7 +322,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     else:
                         reward_pre = 0
 
-    if assignment is not None: # assign on-demand order (worker_type must be 0)
+    if worker_type == 0 and assignment is not None: # assign on-demand order (worker_type must be 0)
         plat, plon, dlat, dlon, appear_time, type = new_orders_state[assignment]
         waiting_time = current_time - appear_time
 

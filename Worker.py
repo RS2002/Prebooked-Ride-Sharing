@@ -79,24 +79,24 @@ class Buffer():
         self.episode = []
 
     def append(self, experience, episode=0):
-        # if self.num > 0 and self.episode[0]<episode-self.episode_capacity:
-        #     episode_np = np.array(self.episode)
-        #     old_record_num = len(episode_np[episode_np<(episode-self.episode_capacity)])
-        #     self.num -= old_record_num
-        #     self.worker_state = self.worker_state[old_record_num:]
-        #     self.order_state = self.order_state[old_record_num:]
-        #     self.order_num = self.order_num[old_record_num:]
-        #     self.action = self.action[old_record_num:]
-        #     self.delta_t = self.delta_t[old_record_num:]
-        #     self.worker_state_next = self.worker_state_next[old_record_num:]
-        #     self.order_state_next = self.order_state_next[old_record_num:]
-        #     self.order_num_next = self.order_num_next[old_record_num:]
-        #     self.action_next = self.action_next[old_record_num:]
-        #     self.reward = self.reward[old_record_num:]
-        #     self.episode = self.episode[old_record_num:]
-        #     if self.episode[0]<episode-self.episode_capacity:
-        #         print("Buffer Error!")
-        #         exit(-1)
+        if self.num > 0 and self.episode[0]<episode-self.episode_capacity:
+            episode_np = np.array(self.episode)
+            old_record_num = len(episode_np[episode_np<(episode-self.episode_capacity)])
+            self.num -= old_record_num
+            self.worker_state = self.worker_state[old_record_num:]
+            self.order_state = self.order_state[old_record_num:]
+            self.order_num = self.order_num[old_record_num:]
+            self.action = self.action[old_record_num:]
+            self.delta_t = self.delta_t[old_record_num:]
+            self.worker_state_next = self.worker_state_next[old_record_num:]
+            self.order_state_next = self.order_state_next[old_record_num:]
+            self.order_num_next = self.order_num_next[old_record_num:]
+            self.action_next = self.action_next[old_record_num:]
+            self.reward = self.reward[old_record_num:]
+            self.episode = self.episode[old_record_num:]
+            if self.episode[0]<episode-self.episode_capacity:
+                print("Buffer Error!")
+                exit(-1)
 
 
         state, action, delta_t, reward, state_next, action_next = experience
@@ -186,8 +186,8 @@ class Worker():
         print('Platform total parameters:', 2 * sum(p.numel() for p in self.Q_training.parameters() if p.requires_grad))
         self.update_Qtarget(tau=1.0)
 
-        self.optim = torch.optim.Adam(self.Q_training.parameters(), lr=lr, weight_decay=0.0)
-        self.optim_pre = torch.optim.Adam(self.Q_training_pre.parameters(), lr=lr, weight_decay=0.0)
+        self.optim = torch.optim.Adam(self.Q_training.parameters(), lr=lr, weight_decay=0.01)
+        self.optim_pre = torch.optim.Adam(self.Q_training_pre.parameters(), lr=lr, weight_decay=0.01)
         self.schedule = torch.optim.lr_scheduler.ExponentialLR(self.optim, gamma=0.99)
         self.schedule_pre = torch.optim.lr_scheduler.ExponentialLR(self.optim_pre, gamma=0.99)
 
@@ -231,7 +231,8 @@ class Worker():
         for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
             target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
-    def reset(self, capacity = 3, train=True):
+    def reset(self, capacity = 3, train=True, train_pre = True):
+        self.train_pre = train_pre
         if train:
             self.Q_training.train()
             self.Q_training_pre.train()
@@ -340,8 +341,14 @@ class Worker():
         # 2. epsilon-greedy explore
         exploration_matrix = torch.rand_like(q_value)
         q_value[exploration_matrix < exploration_rate] = INF
+
         # 3. delete the Q value of not available workers
-        q_value[self.observe_space[:,10]==1] = -INF
+        q_value[self.observe_space[:, 10] == 1] = -INF
+        # 4. avoid pooling conflict
+        for j in range(q_value.shape[1]):
+            if order[j, -1] == 1:
+                q_value[self.current_order_num != 0, j] = -INF
+
         return q_value.cpu().detach().numpy(), order
 
     def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10):
@@ -384,7 +391,7 @@ class Worker():
 
             optim.step()
             loss_list.append(loss.item())
-        # schedule.step()
+        schedule.step()
         return np.mean(loss_list)
 
     def update_pre(self, assignment, order_pre):
@@ -420,23 +427,29 @@ class Worker():
                 self.waiting_time[i] = 0
 
             if self.is_train:
-                if results[i][7] is not None:
-                    self.buffer.append(results[i][7], episode)
-                if results[i][8] is not None:
-                    self.buffer_pre.append(results[i][8], episode)
+                if self.train_pre:
+                    if results[i][8] is not None:
+                        self.buffer_pre.append(results[i][8], episode)
+                else:
+                    if results[i][7] is not None:
+                        self.buffer.append(results[i][7], episode)
+
 
         if self.is_train and final_step:
             for i in range(self.num):
-                if len(self.experience[i])>0:
-                    self.experience[i].append(-1) # △t: -1 represents done
-                    self.experience[i].append(self.experience[i][0]) # meaningless: only used to keep a same dimension
-                    self.experience[i].append(self.experience[i][1])
-                    self.buffer.append(self.experience[i], episode)
-                if len(self.experience_pre[i])>0:
-                    self.experience_pre[i].append(-1) # △t: -1 represents done
-                    self.experience_pre[i].append(self.experience_pre[i][0]) # meaningless: only used to keep a same dimension
-                    self.experience_pre[i].append(self.experience_pre[i][1])
-                    self.buffer_pre.append(self.experience_pre[i], episode)
+                if self.train_pre:
+                    if len(self.experience_pre[i])>0:
+                        self.experience_pre[i].append(-1) # △t: -1 represents done
+                        self.experience_pre[i].append(self.experience_pre[i][0]) # meaningless: only used to keep a same dimension
+                        self.experience_pre[i].append(self.experience_pre[i][1])
+                        self.buffer_pre.append(self.experience_pre[i], episode)
+                else:
+                    if len(self.experience[i])>0:
+                        self.experience[i].append(-1) # △t: -1 represents done
+                        self.experience[i].append(self.experience[i][0]) # meaningless: only used to keep a same dimension
+                        self.experience[i].append(self.experience[i][1])
+                        self.buffer.append(self.experience[i], episode)
+
 
         ultilization_rate = np.sum(self.current_order_num!=0) / self.num
         if ultilization_rate > self.max_ultilization_rate:
@@ -503,7 +516,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     # 3. run 1 minute
     step = 1
-    if observe_space[9] >0:  # pick up
+    if assign_state != 0 or observe_space[9] >0:  # pick up
         if observe_space[9] > step:
             observe_space[9] -= step
         else:

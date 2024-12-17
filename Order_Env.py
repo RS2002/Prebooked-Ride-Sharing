@@ -19,9 +19,12 @@ class Demand():
     p_sample: randomly select 100p% samples from the dataset
     wait_time: the maximum waiting time of each order
     '''
-    def reset(self, day = 1, hour = 0, start_time = 0, pre_sample = 0.1, p_sample = 0.95, p_pooling = 0.5, prebook_start = 0, prebook_end = 10, wait_time = 5):
+    def reset(self, day = 1, hour = 0, start_time = 0, pre_sample = 0.1, p_sample = 0.95, p_pooling = 0.5, prebook_start = 0, prebook_end = 10, wait_time = 5, mode = 1, advance_time = 10):
         self.filtered_demand = self.demand[(self.demand["day"]==day) & (self.demand["hour"]==hour)]
         self.filtered_demand = self.filtered_demand.sample(frac=p_sample).sort_index()
+
+        self.mode = mode
+        self.advance_time = advance_time
 
         demand_pre = self.filtered_demand[self.filtered_demand['minute'] > 30]
         demand_pre = demand_pre.copy()
@@ -31,7 +34,17 @@ class Demand():
 
         self.filtered_demand['type'] = np.random.choice([0, 1], size=len(self.filtered_demand), p=[p_pooling, 1 - p_pooling])
         self.filtered_demand_pre['type'] = np.random.choice([0, 1], size=len(self.filtered_demand_pre), p=[p_pooling, 1 - p_pooling])
-        self.filtered_demand_pre['appear_time'] =np.random.randint(prebook_start, prebook_end + 1, size=len(self.filtered_demand_pre))
+        if self.mode == 1:
+            self.filtered_demand_pre['appear_time'] = np.random.randint(prebook_start, prebook_end + 1, size=len(self.filtered_demand_pre))
+        elif self.mode == 2:
+            appear_time = np.array(self.filtered_demand_pre['minute']) - self.advance_time
+            appear_time[appear_time<0] = 0
+            self.filtered_demand_pre['appear_time'] = appear_time
+            # self.filtered_demand_pre['appear_time'] = np.array(self.filtered_demand_pre['minute']) - self.advance_time
+        elif self.mode == 3:
+            schedule_time = np.array(self.filtered_demand_pre['minute'])
+            self.filtered_demand_pre['appear_time'] = np.array([np.random.randint(0, schedule_time[i] - 10) for i in range(len(self.filtered_demand_pre))])
+
         # self.filtered_demand['type'] = self.get_type(len(self.filtered_demand), p_pooling)
         # self.filtered_demand_pre['type'] = self.get_type(len(self.filtered_demand_pre), p_pooling_pre)
 
@@ -46,6 +59,7 @@ class Demand():
 
         self.current_demand = self.filtered_demand.loc[self.filtered_demand['minute'] == start_time].reset_index(drop=True)
         # self.current_demand_pre = self.filtered_demand_pre.copy().reset_index(drop=True)
+
         self.current_demand_pre = self.filtered_demand_pre.loc[self.filtered_demand_pre['appear_time'] == start_time].reset_index(drop=True)
 
         self.current_time = start_time
@@ -89,6 +103,7 @@ class Demand():
                 index=self.current_demand[self.current_demand['minute'] <= (self.current_time - self.wait_time)].index).reset_index(
                 drop=True)
 
+
         self.current_demand_pre = pd.concat([self.current_demand_pre, self.filtered_demand_pre.loc[self.filtered_demand_pre['appear_time'] == self.current_time]])
         self.current_demand_pre = self.current_demand_pre.reset_index(drop=True)
 
@@ -110,9 +125,9 @@ class Demand():
 
 if __name__ == '__main__':
     # test
-    with open("./data/Manhattan_dic.pkl", 'rb') as f:
+    with open("../data/Manhattan_dic.pkl", 'rb') as f:
         manhattan_dic = pickle.load(f)
     zone_table = manhattan_dic["zone_num"]
-    demand = Demand("./data/yellow_tripdata_2024-07.parquet",zone_table)
-    demand.reset(day = 1, hour = 18, start_time = 0, pre_sample = 0.1, p_sample = 0.95, wait_time = 5)
+    demand = Demand("../data/yellow_tripdata_2024-07.parquet",zone_table)
+    demand.reset(day = 1, hour = 18, start_time = 0, pre_sample = 0.1, p_sample = 0.95, wait_time = 5, mode = 3)
     demand.pickup([],[])
