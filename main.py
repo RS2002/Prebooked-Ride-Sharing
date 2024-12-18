@@ -398,9 +398,9 @@ def main():
                     print("Train On-demand Only!")
                 else:
                     # worker.save("latest.pth", "latest_pre.pth")
-                    if j > args.minimum_episode and reward_pre < best_reward_pre and reward < best_reward_on:
+                    if reward_pre < best_reward_pre and reward < best_reward_on:
                       best_epoch += 1
-                      if best_epoch >= args.converge_epoch:
+                      if j > args.minimum_episode and best_epoch >= args.converge_epoch:
                             break
                     else:
                         worker.save("best.pth", "best_pre.pth")
