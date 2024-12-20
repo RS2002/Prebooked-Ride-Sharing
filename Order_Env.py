@@ -105,7 +105,7 @@ class Demand():
 
 
         self.current_demand_pre = pd.concat([self.current_demand_pre, self.filtered_demand_pre.loc[self.filtered_demand_pre['appear_time'] == self.current_time]])
-        self.current_demand_pre = self.current_demand_pre.reset_index(drop=True)
+        self.current_demand_pre = self.current_demand_pre.sort_values(by='minute').reset_index(drop=True)
 
 
     '''

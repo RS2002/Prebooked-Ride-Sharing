@@ -110,13 +110,23 @@ class Worker_Net(nn.Module):
             self.lstm = BiLSTM(order_size,32, dropout=dropout)
         else:
             self.lstm = LSTM(order_size,32, dropout=dropout)
-        self.encode = MLP([state_size,16,32], arl=True, dropout=dropout)
-        self.mlp = MLP([64,64,32,output_dim], dropout=dropout)
+        self.encode = MLP([state_size - 6,16,32], arl=True, dropout=dropout)
+        self.mlp = MLP([96,64,32,output_dim], dropout=dropout)
+
+        self.mask = nn.Parameter(torch.randn([32]))
+        self.encode2 = MLP([6,16,32], arl=True, dropout=dropout)
 
     def forward(self,x_state,x_order,order_num=None):
         x_order = self.lstm(x_order,order_num)
-        x_state = self.encode(x_state)
-        y = self.mlp(torch.concat([x_state,x_order],dim=-1))
+
+        x_state1 = torch.concat([x_state[...,:2],x_state[...,8:]],dim=-1)
+        x_state2 = x_state[:,2:8]
+        mask_pos = (x_state[:,6:7]==0).float()
+        x_state1 = self.encode(x_state1)
+        x_state2 = self.encode2(x_state2)
+        x_state2 = x_state2 * (1 - mask_pos) + self.mask * mask_pos
+
+        y = self.mlp(torch.concat([x_state1,x_state2,x_order],dim=-1))
         return y
 
 class Order_Net(nn.Module):

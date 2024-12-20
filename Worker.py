@@ -99,7 +99,7 @@ class Buffer():
                 exit(-1)
 
 
-        state, action, delta_t, reward, state_next, action_next = experience
+        state, action, reward, delta_t,  state_next, action_next = experience
         if self.num == self.capacity:
             self.worker_state = self.worker_state[1:]
             self.order_state = self.order_state[1:]
@@ -160,6 +160,9 @@ class Worker():
         self.buffer_pre = buffer_pre
 
         self.gamma = gamma
+        self.gamma_pre = gamma
+
+
         self.device = device
         self.max_step = max_step
         self.num = num
@@ -171,10 +174,10 @@ class Worker():
         self.coordinate_lookup_lon = np.array(self.zone_dic["centroid_lon"])
         self.zone_map = np.array(self.zone_dic["map"])
 
-        self.Q_training = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
-        self.Q_target = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
-        self.Q_training_pre = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
-        self.Q_target_pre = Q_Net(state_size=12, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_training = Q_Net(state_size=14, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_target = Q_Net(state_size=14, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_training_pre = Q_Net(state_size=14, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_target_pre = Q_Net(state_size=14, history_order_size=5, current_order_size=6, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
 
         self.load(model_path,model_pre_path,self.device)
         for param in self.Q_target.parameters():
@@ -231,7 +234,7 @@ class Worker():
         for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
             target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
-    def reset(self, capacity = 3, train=True, train_pre = True):
+    def reset(self, capacity = 3, pre_rate = 0, pooling_rate = 0, train=True, train_pre = True):
         self.train_pre = train_pre
         if train:
             self.Q_training.train()
@@ -244,6 +247,9 @@ class Worker():
 
         self.is_train = train
 
+        self.pre_rate = pre_rate
+        self.pooling_rate = pooling_rate
+
         '''
         observation space
         0,1: current lat,lon (required to be normalized before inputting to the network, following lat and lon remain same)
@@ -253,8 +259,11 @@ class Worker():
         10: state -- 0 allows to pick up new orders, 1 does not (because picking up the order that doesn't allow pooling or the capacity is full)
         11: current time
         '''
-        self.observe_space = np.zeros([self.num, 12])
+        self.observe_space = np.zeros([self.num, 14])
         self.observe_space[:,8] = capacity
+
+        self.observe_space[:,12] = self.pre_rate
+        self.observe_space[:,13] = self.pooling_rate
 
         '''
         current orders
@@ -334,7 +343,7 @@ class Worker():
 
         torch.set_grad_enabled(False)
         # 1. calculate q-value
-        self.observe_space[:,-1] = current_time
+        self.observe_space[:,11] = current_time
         x1, x2, x3 = norm(order, self.observe_space, self.current_orders)
         x1, x2, x3 = torch.tensor(x1).to(self.device), torch.tensor(x2).to(self.device), torch.tensor(x3).to(self.device)
         q_value = network(x1, x2, x3, torch.from_numpy(self.current_order_num).to(self.device))
@@ -342,19 +351,24 @@ class Worker():
         exploration_matrix = torch.rand_like(q_value)
         q_value[exploration_matrix < exploration_rate] = INF
 
-        # 3. delete the Q value of not available workers
-        q_value[self.observe_space[:, 10] == 1] = -INF
-        # 4. avoid pooling conflict
-        for j in range(q_value.shape[1]):
-            if order[j, -1] == 1:
-                q_value[self.current_order_num != 0, j] = -INF
+        if network is self.Q_training:
+            # 3. delete the Q value of not available workers
+            q_value[self.observe_space[:, 10] == 1] = -INF
+            # 4. avoid pooling conflict
+            for j in range(q_value.shape[1]):
+                if order[j, -1] == 1:
+                    q_value[self.current_order_num != 0, j] = -INF
 
         return q_value.cpu().detach().numpy(), order
 
-    def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10):
+    def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10,show_pbar=True):
         torch.set_grad_enabled(True)
         net_train.train()
-        pbar = tqdm.tqdm(range(train_times))
+        if show_pbar:
+            pbar = tqdm.tqdm(range(train_times))
+        else:
+            pbar = range(train_times)
+
         loss_list = []
         for _ in pbar:
             worker_state, order_state, order_num, action, delta_t, reward, worker_state_next, order_state_next, order_num_next, action_next = buffer.sample(batch_size,self.device)
@@ -373,13 +387,18 @@ class Worker():
             next_q_value = torch.min(next_q_value1,next_q_value2)
 
             is_done = (delta_t == -1).float()
-            target =  reward + (self.gamma ** delta_t * next_q_value) * (1 - is_done)
+
+            if net_train is self.Q_training:
+                target =  reward + (self.gamma ** delta_t * next_q_value) * (1 - is_done)
+            else:
+                target =  reward + (self.gamma_pre ** delta_t * next_q_value) * (1 - is_done)
+
 
             loss = self.loss_func(current_q_value.float(),target.float())
             optim.zero_grad()
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(net_train.parameters(), 1.0)  # avoid gradient explosion
+            # torch.nn.utils.clip_grad_norm_(net_train.parameters(), 1.0)  # avoid gradient explosion
             has_nan = False
             for name, param in net_train.named_parameters():
                 if param.grad is not None:
@@ -391,7 +410,7 @@ class Worker():
 
             optim.step()
             loss_list.append(loss.item())
-        schedule.step()
+        # schedule.step()
         return np.mean(loss_list)
 
     def update_pre(self, assignment, order_pre):
@@ -468,7 +487,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     if reward_pre is not None:
         if len(experience_pre) > 0:
-            experience_pre.append(feedback[4] - experience_pre[0][0][-1])  # △t
+            experience_pre.append(feedback[4] - experience_pre[0][0][11])  # △t
             experience_pre.append(feedback[0])  # s_next
             experience_pre.append(feedback[1])  # a_next
             full_experience_pre = experience_pre
@@ -479,7 +498,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
 
     if reward is not None:
         if len(experience) > 0:
-            experience.append(feedback[4] - experience[0][0][-1])  # △t
+            experience.append(feedback[4] - experience[0][0][11])  # △t
             experience.append(feedback[2])  # s_next
             experience.append(feedback[3])  # a_next
             full_experience = experience

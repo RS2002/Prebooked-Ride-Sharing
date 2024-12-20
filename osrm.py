@@ -34,9 +34,6 @@ def TSP_route(origin_point, destination_points):
     # session.mount('http://', adapter)
     # session.mount('https://', adapter)
 
-    r = session.get(url)
-    res = r.json()
-
     route = []
     route_time = []
     time = []
@@ -44,30 +41,37 @@ def TSP_route(origin_point, destination_points):
     time_order = []
     distance = 0
 
-    # print(res['code'])
-    if res['code'] == 'Ok':
-        route = res["trips"][0]["geometry"]["coordinates"]
-
-        distance = res['trips'][0]['distance']
-
-        waypoints = res['waypoints']
-        for i in range(len(waypoints)):
-            time_permutation.append(waypoints[i]['waypoint_index'])
-
-        legs = res['trips'][0]['legs']
-        for i in range(len(legs)):
-            route_time.extend(legs[i]['annotation']["duration"])
-            if i == 0:
-                time.append(int(legs[i]['duration'] / 60))
-            else:
-                time.append(int(legs[i]['duration'] / 60) + time[i - 1])
-
-        for i in range(len(time)):
-            time_order.append(time[time_permutation[i + 1] - 1])
-
-    else:
+    r = session.get(url)
+    if not r.text:
         route_time = [0]
         time_order = [0]
+    else:
+        res = r.json()
+
+        # print(res['code'])
+        if res['code'] == 'Ok':
+            route = res["trips"][0]["geometry"]["coordinates"]
+
+            distance = res['trips'][0]['distance']
+
+            waypoints = res['waypoints']
+            for i in range(len(waypoints)):
+                time_permutation.append(waypoints[i]['waypoint_index'])
+
+            legs = res['trips'][0]['legs']
+            for i in range(len(legs)):
+                route_time.extend(legs[i]['annotation']["duration"])
+                if i == 0:
+                    time.append(int(legs[i]['duration'] / 60))
+                else:
+                    time.append(int(legs[i]['duration'] / 60) + time[i - 1])
+
+            for i in range(len(time)):
+                time_order.append(time[time_permutation[i + 1] - 1])
+
+        else:
+            route_time = [0]
+            time_order = [0]
 
     return (route,route_time,time_order, distance) # newly added distance
     ''' 

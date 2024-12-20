@@ -33,7 +33,7 @@ def get_args():
 
     # parser.add_argument("--prebook_start", type=int, nargs='+', default=[0,0,0,10])
     # parser.add_argument("--prebook_end", type=int, nargs='+', default=[0,10,20,20])
-    parser.add_argument("--advance_time", type=int, nargs='+', default=[10,20,30])
+    parser.add_argument("--advance_time", type=int, nargs='+', default=[20,40,60])
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)

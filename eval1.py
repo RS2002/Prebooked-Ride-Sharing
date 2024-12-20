@@ -31,8 +31,8 @@ def get_args():
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
     parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[15.0,1.0,2.0,1.0,0.0,5.0,3.0])
 
-    parser.add_argument("--prebook_start", type=int, nargs='+', default=[0,0,0,10])
-    parser.add_argument("--prebook_end", type=int, nargs='+', default=[0,10,20,20])
+    parser.add_argument("--prebook_start", type=int, nargs='+', default=[0])
+    parser.add_argument("--prebook_end", type=int, nargs='+', default=[0])
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
@@ -47,8 +47,8 @@ def get_args():
     parser.add_argument('--init_episode', type=int, default=0)
     parser.add_argument('--njobs', type=int, default=24)
 
-    parser.add_argument("--model_path",type=str,default="best.pth")
-    parser.add_argument("--model_pre_path",type=str,default="best_pre.pth")
+    parser.add_argument("--model_path",type=str,default="latest.pth")
+    parser.add_argument("--model_pre_path",type=str,default="latest_pre.pth")
 
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")

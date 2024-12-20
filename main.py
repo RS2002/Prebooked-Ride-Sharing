@@ -31,7 +31,7 @@ def get_args():
 
     parser.add_argument("--mode", type=int, default=2)
     parser.add_argument("--prebook_start", type=int, default=0)
-    parser.add_argument("--prebook_end", type=int, default=10)
+    parser.add_argument("--prebook_end", type=int, default=0)
     parser.add_argument("--advance_time", type=int, default=20)
     parser.add_argument("--rand_mode", action="store_true",default=False)
     parser.add_argument("--rand_rate", action="store_true",default=False)
@@ -86,7 +86,7 @@ def main():
     worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, bi_direction = args.bi_direction, dropout = args.dropout)
     reward_func = reward_func_generator(args.reward_parameter, args.order_threshold)
 
-    best_reward = -100.0
+    # best_reward = -100.0
     best_epoch = 0
     best_reward_on = -100.0
     best_reward_pre = -100.0
@@ -111,16 +111,15 @@ def main():
 
     while True:
 
-        if flag_on:
-            train_pre = False
-        elif flag_pre:
-            train_pre = True
-        else:
-            train_pre = not train_pre
+        # if flag_on:
+        #     train_pre = False
+        # elif flag_pre:
+        #     train_pre = True
+        # else:
+        #     train_pre = not train_pre
 
         j += 1
-        worker.reset(train=True, train_pre=train_pre)
-        platform.reset(discount_factor=args.gamma)
+
 
         if rand_prop:
             # pre_sample = random.random()
@@ -130,8 +129,18 @@ def main():
             p_pooling = p_pooling * 0.1
             if train_pre:
                 pre_sample = random.randint(1,10)
+                # candidate = np.arange(1,11)
+                # temperature = j
+                # exp_prob = np.exp( - (candidate+1) / temperature)
+                # prob = exp_prob / np.sum(exp_prob)
+                # pre_sample = np.random.choice(candidate, p=prob)
             else:
                 pre_sample = random.randint(0,10)
+                # candidate = np.arange(0,11)
+                # temperature = j
+                # exp_prob = np.exp( - (candidate+1) / temperature)
+                # prob = exp_prob / np.sum(exp_prob)
+                # pre_sample = np.random.choice(candidate, p=prob)
             pre_sample = pre_sample * 0.1
 
             print("Pre-booked Rate: {:} , Pooling Rate: {:}".format(pre_sample,p_pooling))
@@ -149,9 +158,29 @@ def main():
             prebook_start = random.randint(0, 10)
             prebook_end = random.randint(prebook_start,20)
 
-            # advance_time = random.randint(10,30)
-            advance_time = random.randint(1, 3)
+            # # advance_time = random.randint(10,30)
+            advance_time = random.randint(1, 6)
             advance_time = advance_time * 10
+
+            # # Curriculum Learning
+            # if train_pre:
+            #     candidate = np.array([1, 2, 3, 4, 5, 6])
+            #     # temperature = j
+            #     temperature = j / 2
+            #     exp_prob = np.exp(candidate / temperature)
+            #     prob = exp_prob / np.sum(exp_prob)
+            #     advance_time = np.random.choice(candidate, p=prob)
+            #     advance_time = advance_time * 10
+            # else:
+            #     advance_time = random.randint(1, 6)
+            #     advance_time = advance_time * 10
+
+            # candidate = np.array([1, 2, 3, 4, 5, 6])
+            # temperature = j
+            # exp_prob = np.exp(candidate / temperature)
+            # prob = exp_prob / np.sum(exp_prob)
+            # advance_time = np.random.choice(candidate, p=prob)
+            # advance_time = advance_time * 10
 
             print("Pre-booked Start Time: {:} , End Time: {:} , Advance Time {:}".format(prebook_start,prebook_end,advance_time))
         else:
@@ -160,7 +189,8 @@ def main():
             advance_time = args.advance_time
 
 
-
+        worker.reset(train=True, train_pre=train_pre, pre_rate=pre_sample, pooling_rate=p_pooling)
+        platform.reset(discount_factor=args.gamma)
         ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
 
 
@@ -176,6 +206,10 @@ def main():
 
         print("Exploration Rate: ", exploration_rate_temp1, exploration_rate_temp2)
         pbar = tqdm.tqdm(range(args.max_step))
+
+        loss_list = []
+        loss_pre_list = []
+
         for t in pbar:
             q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t, None, exploration_rate_temp1)
             if order_pre is not None:
@@ -193,14 +227,31 @@ def main():
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
 
+            # if (t+1) % 6 == 0:
+            #     if train_pre:
+            #         if buffer.num > args.batch_size:
+            #             loss_pre = worker.train(buffer_pre, worker.Q_training_pre, worker.Q_target_pre, worker.optim_pre,
+            #                                     worker.schedule_pre, batch_size=args.batch_size,
+            #                                     train_times=1, show_pbar=False)
+            #             loss_pre_list.append(loss_pre)
+            #     else:
+            #         if buffer.num > args.batch_size:
+            #             loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim, worker.schedule,
+            #                                 batch_size=args.batch_size, train_times=1, show_pbar=False)
+            #             loss_list.append(loss)
+
         if train_pre:
             loss = 0
             loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
+            # loss_pre = np.mean(loss_pre_list)
             worker.update_Q_pre()
+            # worker.schedule_pre.step()
         else:
             loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
+            # loss = np.mean(loss_list)
             loss_pre = 0
             worker.update_Q_on()
+            # worker.schedule.step()
 
         total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
         drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
@@ -267,12 +318,9 @@ def main():
 
         if j % args.eval_episode == 0:
 
-            # train_pre = not train_pre
-            # buffer.reset()
-            # buffer_pre.reset()
-
-            worker.reset(train=False)
-            platform.reset(discount_factor=args.gamma)
+            train_pre = not train_pre
+            buffer.reset()
+            buffer_pre.reset()
 
             pre_sample = prebooked_rate
             p_pooling = pooling_rate
@@ -282,6 +330,8 @@ def main():
             prebook_end = args.prebook_end
             advance_time = args.advance_time
 
+            worker.reset(train=False, pre_rate=pre_sample, pooling_rate=p_pooling)
+            platform.reset(discount_factor=args.gamma)
             ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=7,
                                                                                                           start_time=0,
                                                                                                           pre_sample=pre_sample,
@@ -386,15 +436,15 @@ def main():
                     print(best_reward_pre,reward_pre)
                     flag_pre = True
                     # worker.load("latest.pth", "latest_pre.pth",device)
-                    buffer.reset()
-                    buffer_pre.reset()
+                    # buffer.reset()
+                    # buffer_pre.reset()
                     print("Train Pre-book Only!")
                 elif best_reward_on - reward > reward_threshold_on:
                     print(best_reward_on,reward)
                     flag_on = True
                     # worker.load("latest.pth", "latest_pre.pth",device)
-                    buffer.reset()
-                    buffer_pre.reset()
+                    # buffer.reset()
+                    # buffer_pre.reset()
                     print("Train On-demand Only!")
                 else:
                     # worker.save("latest.pth", "latest_pre.pth")

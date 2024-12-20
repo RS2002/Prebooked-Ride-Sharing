@@ -49,6 +49,9 @@ class Platform():
 
     def reset(self,discount_factor=0.99):
         self.discount_factor = discount_factor
+        self.discount_factor_pre = discount_factor
+
+
         self.Total_Reward = 0
         self.Total_Reward_Pre = 0
 
@@ -155,7 +158,7 @@ class Platform():
 
             reward_pre, reward = result[0][1]
             if reward_pre is not None:
-                self.Total_Reward_Pre += reward_pre * self.discount_factor**current_time
+                self.Total_Reward_Pre += reward_pre * self.discount_factor_pre**current_time
             if reward is not None:
                 self.Total_Reward += reward * self.discount_factor**current_time
 
