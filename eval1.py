@@ -14,7 +14,7 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--train_times', type=int, default=15)
     parser.add_argument('--lr', type=float, default=0.0005)
-    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=500)

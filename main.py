@@ -14,15 +14,15 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--train_times', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.0005)
-    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=1000)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=5e5)
+    parser.add_argument('--buffer_capacity', type=int, default=3e4)
     parser.add_argument('--buffer_episode', type=int, default=10)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
-    parser.add_argument('--prebooked_rate', type=float, default=0.20)
+    parser.add_argument('--prebooked_rate', type=float, default=0.80)
     parser.add_argument('--pooling_rate', type=float, default=0.80)
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument("--mode", type=int, default=2)
     parser.add_argument("--prebook_start", type=int, default=0)
     parser.add_argument("--prebook_end", type=int, default=0)
-    parser.add_argument("--advance_time", type=int, default=20)
+    parser.add_argument("--advance_time", type=int, default=30)
     parser.add_argument("--rand_mode", action="store_true",default=False)
     parser.add_argument("--rand_rate", action="store_true",default=False)
     parser.add_argument("--rand_appear", action="store_true",default=False)
@@ -91,8 +91,8 @@ def main():
     best_reward_on = -100.0
     best_reward_pre = -100.0
 
-    flag_on = False
-    flag_pre = False
+    # flag_on = False
+    # flag_pre = False
 
 
     j = args.init_episode
@@ -122,26 +122,26 @@ def main():
 
 
         if rand_prop:
-            # pre_sample = random.random()
-            # p_pooling = random.random()
+            pre_sample = random.random()
+            p_pooling = random.random()
 
-            p_pooling = random.randint(0,10)
-            p_pooling = p_pooling * 0.1
-            if train_pre:
-                pre_sample = random.randint(1,10)
-                # candidate = np.arange(1,11)
-                # temperature = j
-                # exp_prob = np.exp( - (candidate+1) / temperature)
-                # prob = exp_prob / np.sum(exp_prob)
-                # pre_sample = np.random.choice(candidate, p=prob)
-            else:
-                pre_sample = random.randint(0,10)
-                # candidate = np.arange(0,11)
-                # temperature = j
-                # exp_prob = np.exp( - (candidate+1) / temperature)
-                # prob = exp_prob / np.sum(exp_prob)
-                # pre_sample = np.random.choice(candidate, p=prob)
-            pre_sample = pre_sample * 0.1
+            # p_pooling = random.randint(0,10)
+            # p_pooling = p_pooling * 0.1
+            # if train_pre:
+            #     pre_sample = random.randint(1,10)
+            #     # candidate = np.arange(1,11)
+            #     # temperature = j
+            #     # exp_prob = np.exp( - (candidate+1) / temperature)
+            #     # prob = exp_prob / np.sum(exp_prob)
+            #     # pre_sample = np.random.choice(candidate, p=prob)
+            # else:
+            #     pre_sample = random.randint(0,10)
+            #     # candidate = np.arange(0,11)
+            #     # temperature = j
+            #     # exp_prob = np.exp( - (candidate+1) / temperature)
+            #     # prob = exp_prob / np.sum(exp_prob)
+            #     # pre_sample = np.random.choice(candidate, p=prob)
+            # pre_sample = pre_sample * 0.1
 
             print("Pre-booked Rate: {:} , Pooling Rate: {:}".format(pre_sample,p_pooling))
         else:
@@ -158,29 +158,31 @@ def main():
             prebook_start = random.randint(0, 10)
             prebook_end = random.randint(prebook_start,20)
 
-            # # advance_time = random.randint(10,30)
-            advance_time = random.randint(1, 6)
-            advance_time = advance_time * 10
+            advance_time = random.randint(10, 60)
 
-            # # Curriculum Learning
-            # if train_pre:
-            #     candidate = np.array([1, 2, 3, 4, 5, 6])
-            #     # temperature = j
-            #     temperature = j / 2
-            #     exp_prob = np.exp(candidate / temperature)
-            #     prob = exp_prob / np.sum(exp_prob)
-            #     advance_time = np.random.choice(candidate, p=prob)
-            #     advance_time = advance_time * 10
-            # else:
-            #     advance_time = random.randint(1, 6)
-            #     advance_time = advance_time * 10
-
-            # candidate = np.array([1, 2, 3, 4, 5, 6])
-            # temperature = j
-            # exp_prob = np.exp(candidate / temperature)
-            # prob = exp_prob / np.sum(exp_prob)
-            # advance_time = np.random.choice(candidate, p=prob)
+            # # # advance_time = random.randint(10,30)
+            # advance_time = random.randint(1, 6)
             # advance_time = advance_time * 10
+            #
+            # # # Curriculum Learning
+            # # if train_pre:
+            # #     candidate = np.array([1, 2, 3, 4, 5, 6])
+            # #     # temperature = j
+            # #     temperature = j / 2
+            # #     exp_prob = np.exp(candidate / temperature)
+            # #     prob = exp_prob / np.sum(exp_prob)
+            # #     advance_time = np.random.choice(candidate, p=prob)
+            # #     advance_time = advance_time * 10
+            # # else:
+            # #     advance_time = random.randint(1, 6)
+            # #     advance_time = advance_time * 10
+            #
+            # # candidate = np.array([1, 2, 3, 4, 5, 6])
+            # # temperature = j
+            # # exp_prob = np.exp(candidate / temperature)
+            # # prob = exp_prob / np.sum(exp_prob)
+            # # advance_time = np.random.choice(candidate, p=prob)
+            # # advance_time = advance_time * 10
 
             print("Pre-booked Start Time: {:} , End Time: {:} , Advance Time {:}".format(prebook_start,prebook_end,advance_time))
         else:
@@ -227,28 +229,28 @@ def main():
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
 
-            # if (t+1) % 6 == 0:
-            #     if train_pre:
-            #         if buffer.num > args.batch_size:
-            #             loss_pre = worker.train(buffer_pre, worker.Q_training_pre, worker.Q_target_pre, worker.optim_pre,
-            #                                     worker.schedule_pre, batch_size=args.batch_size,
-            #                                     train_times=1, show_pbar=False)
-            #             loss_pre_list.append(loss_pre)
-            #     else:
-            #         if buffer.num > args.batch_size:
-            #             loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim, worker.schedule,
-            #                                 batch_size=args.batch_size, train_times=1, show_pbar=False)
-            #             loss_list.append(loss)
+            if (t+1) % 6 == 0:
+                if train_pre:
+                    if buffer_pre.num > args.batch_size:
+                        loss_pre = worker.train(buffer_pre, worker.Q_training_pre, worker.Q_target_pre, worker.optim_pre,
+                                                worker.schedule_pre, batch_size=args.batch_size,
+                                                train_times=1, show_pbar=False)
+                        loss_pre_list.append(loss_pre)
+                else:
+                    if buffer.num > args.batch_size:
+                        loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim, worker.schedule,
+                                            batch_size=args.batch_size, train_times=1, show_pbar=False)
+                        loss_list.append(loss)
 
         if train_pre:
             loss = 0
-            loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
-            # loss_pre = np.mean(loss_pre_list)
+            # loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
+            loss_pre = np.mean(loss_pre_list)
             worker.update_Q_pre()
             # worker.schedule_pre.step()
         else:
-            loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
-            # loss = np.mean(loss_list)
+            # loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
+            loss = np.mean(loss_list)
             loss_pre = 0
             worker.update_Q_on()
             # worker.schedule.step()
@@ -316,11 +318,17 @@ def main():
         # if j % (2*args.eval_episode) == 0:
         #     worker.update_Qtarget(1.0)
 
+
+
         if j % args.eval_episode == 0:
 
             train_pre = not train_pre
             buffer.reset()
             buffer_pre.reset()
+
+            # if j % (2 * args.eval_episode) == 0:
+            #     buffer.reset()
+            #     buffer_pre.reset()
 
             pre_sample = prebooked_rate
             p_pooling = pooling_rate

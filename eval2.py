@@ -14,7 +14,7 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--train_times', type=int, default=15)
     parser.add_argument('--lr', type=float, default=0.0005)
-    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
     parser.add_argument('--minimum_episode', type=int, default=500)
@@ -23,8 +23,8 @@ def get_args():
     parser.add_argument('--buffer_episode', type=int, default=10)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
 
-    parser.add_argument('--prebooked_rate', type=float, nargs='+', default=[0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
-    parser.add_argument('--pooling_rate', type=float, nargs='+', default=[0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
+    parser.add_argument('--prebooked_rate', type=float, nargs='+', default=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
+    parser.add_argument('--pooling_rate', type=float, nargs='+', default=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0])
 
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
@@ -33,7 +33,7 @@ def get_args():
 
     # parser.add_argument("--prebook_start", type=int, nargs='+', default=[0,0,0,10])
     # parser.add_argument("--prebook_end", type=int, nargs='+', default=[0,10,20,20])
-    parser.add_argument("--advance_time", type=int, nargs='+', default=[20,40,60])
+    parser.add_argument("--advance_time", type=int, nargs='+', default=[15,20,25,30])
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
@@ -48,8 +48,8 @@ def get_args():
     parser.add_argument('--init_episode', type=int, default=0)
     parser.add_argument('--njobs', type=int, default=24)
 
-    parser.add_argument("--model_path",type=str,default="best.pth")
-    parser.add_argument("--model_pre_path",type=str,default="best_pre.pth")
+    parser.add_argument("--model_path",type=str,default="latest.pth")
+    parser.add_argument("--model_pre_path",type=str,default="latest_pre.pth")
 
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")

@@ -134,11 +134,11 @@ class Buffer():
         if size>self.num:
             size = self.num
 
-        # indices = np.random.randint(0, self.num, size=size)
-        priority = np.array(self.episode)
-        priority = priority - np.min(priority) + 1
-        probabilities = np.array(priority) / np.sum(priority)
-        indices = np.random.choice(self.num, size, p=probabilities)
+        indices = np.random.randint(0, self.num, size=size)
+        # priority = np.array(self.episode)
+        # priority = priority - np.min(priority) + 1
+        # probabilities = np.array(priority) / np.sum(priority)
+        # indices = np.random.choice(self.num, size, p=probabilities)
 
         worker_state = torch.tensor([self.worker_state[i] for i in indices]).to(device)
         order_state = torch.tensor([self.order_state[i] for i in indices]).to(device)
@@ -552,13 +552,14 @@ def single_update(current_travel_route, current_travel_time, experience, experie
             step -= current_travel_time[i]
         else:
             current_travel_time[i] -= step
+            if i == len(current_travel_time) - 1:  # finish all orders
+                observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
+                current_travel_time = []
+                current_travel_route = []
             current_travel_time = current_travel_time[i:]
             current_travel_route = current_travel_route[i:]
             break
-        if i == len(current_travel_time) - 1:  # finish all orders
-            observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
-            current_travel_time = []
-            current_travel_route = []
+
     if len(current_travel_route) > 0:
         observe_space[0], observe_space[1] = current_travel_route[0][1], current_travel_route[0][0]  # lat, lon
     current_orders[:current_orders_num, 2] -= step_minute  # update remaining time
