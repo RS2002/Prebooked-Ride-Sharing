@@ -39,7 +39,7 @@ docker run -t -i -p 6000:6000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backen
 The simulation parameters in our paper are as follows:
 
 1. **Total Simulation Time:** 60 minutes
-2. **Order Distribution:** Pre-booked orders appear only in the last 30 minutes, although platforms can access their information during the first 20 minutes.
+2. **Order Distribution:** Pre-booked orders appear only in the last 30 minutes, although platforms can access their information in advance
 
 You can modify these settings by editing the `Order_Env.py` file. Additionally, the order distribution and appearance times can be adjusted using parameters in argparse as shown below.
 
@@ -66,14 +66,6 @@ python main.py --prebook_start <time when pre-booked orders start to appear> --p
 ```
 
 
-
-### 3.2 Eval
-
-```shell
-python eval.py --prebooked_rate <list1> --pooling_rate <list2> --prebook_start <list3_1> --prebook_end <list3_2>
-```
-
-Please note that `list3_1` and `list3_2` are paired, while `list1`, `list2`, and the pairs `(list3_1, list3_2)` are independent of each other.
 
 
 

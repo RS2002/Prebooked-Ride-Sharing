@@ -552,13 +552,13 @@ def single_update(current_travel_route, current_travel_time, experience, experie
             step -= current_travel_time[i]
         else:
             current_travel_time[i] -= step
-            if i == len(current_travel_time) - 1:  # finish all orders
-                observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
-                current_travel_time = []
-                current_travel_route = []
             current_travel_time = current_travel_time[i:]
             current_travel_route = current_travel_route[i:]
             break
+        if i == len(current_travel_time) - 1:  # finish all orders
+            observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
+            current_travel_time = []
+            current_travel_route = []
 
     if len(current_travel_route) > 0:
         observe_space[0], observe_space[1] = current_travel_route[0][1], current_travel_route[0][0]  # lat, lon
