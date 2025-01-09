@@ -12,7 +12,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('--batch_size', type=int, default=512)
-    parser.add_argument('--train_times', type=int, default=10)
+    parser.add_argument('--train_times', type=int, default=20)
     parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--max_step', type=int, default=60)
@@ -27,7 +27,7 @@ def get_args():
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
-    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[15.0,1.0,2.0,1.0,0.0,5.0,3.0])
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[30.0,1.0,2.0,1.0,0.0,5.0,3.0])
 
     parser.add_argument("--mode", type=int, default=2)
     parser.add_argument("--prebook_start", type=int, default=0)
@@ -202,7 +202,7 @@ def main():
             exploration_rate_temp2 = 0
         else:
             exploration_rate_temp1 = 0
-            exploration_rate_on = max(exploration_rate_on * epsilon_decay_rate, epsilon_final)
+            exploration_rate_on = max(exploration_rate_on * (epsilon_decay_rate), epsilon_final)
             exploration_rate_temp2 = exploration_rate_on
 
 
@@ -229,7 +229,7 @@ def main():
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
 
-            if (t+1) % 6 == 0:
+            if (t+1) % 3 == 0:
                 if train_pre:
                     if buffer_pre.num > args.batch_size:
                         loss_pre = worker.train(buffer_pre, worker.Q_training_pre, worker.Q_target_pre, worker.optim_pre,
@@ -325,6 +325,14 @@ def main():
             train_pre = not train_pre
             buffer.reset()
             buffer_pre.reset()
+
+            # buffer.reset()
+            # if j % 30 == 0:
+            #     train_pre = False
+            #     buffer_pre.reset()
+            # elif train_pre == False:
+            #     train_pre = True
+            #     buffer_pre.reset()
 
             # if j % (2 * args.eval_episode) == 0:
             #     buffer.reset()
