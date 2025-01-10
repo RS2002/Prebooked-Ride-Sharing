@@ -3,11 +3,14 @@ from joblib import Parallel, delayed
 from scipy.optimize import linear_sum_assignment
 import numpy as np
 
-def assign(q_matrix):
+def assign(q_matrix,pad=True):
     threshold = 0
     # Solve Bipartite Match Process with ILP
     num_vehicles, num_demands = q_matrix.shape
-    Value_Matrix = np.concatenate((q_matrix,np.zeros_like(q_matrix)+threshold),axis=1)
+    if pad:
+        Value_Matrix = np.concatenate((q_matrix,np.zeros_like(q_matrix)+threshold),axis=1)
+    else:
+        Value_Matrix = q_matrix
     cost_matrix = -Value_Matrix
     row_indices, col_indices = linear_sum_assignment(cost_matrix)
     # 创建一个列表来保存每个车辆被分配的订单
@@ -172,6 +175,7 @@ reward_parameter_list:
 3 -- conflict punishment (for on-demand agent)
 4 -- indirect reward rate (for pre-booked agent)
 5 -- punishment scale 2 (for real over time)
+6 -- pickup reward
 '''
 def excute(observe_pre, order_pre, observe, current_order_state, current_order_num, assignment, new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time):
     assign_state = 0 # 0: no action, 1: pick up pre-booked order, 2: pick up on-demand order
@@ -262,7 +266,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     time_add = np.sum(new_total_travel_time) - original_total_travel_time  # total added time of all orders
 
                     reward_pick = reward_func(time_add,timeout,pick_pre_time2,direct_distance)
-                    reward_pre += reward_pick
+                    reward_pre += reward_pick * reward_parameter_list[6]
 
                     log["reward"] = reward_pick
                     log["wait"] = pick_pre_time2
@@ -298,7 +302,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                         timeout = int(new_total_travel_time > time_threshold)
 
                         reward_pick = reward_func(time_add, timeout, pick_pre_time2, direct_distance)
-                        reward_pre += reward_pick
+                        reward_pre += reward_pick * reward_parameter_list[6]
 
                         log["reward"] = reward_pick
                         log["wait"] = pick_pre_time2

@@ -52,6 +52,7 @@ def get_args():
 
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")
+    parser.add_argument("--hour", type=int, default=7)
 
     args = parser.parse_args()
     return args
@@ -62,6 +63,7 @@ def main():
     device_name = "cuda:" + args.cuda
     device = torch.device(device_name if torch.cuda.is_available() and not args.cpu else 'cpu')
     dic_list = []
+    hour = args.hour
 
     with open(args.zone_dic_path, 'rb') as f:
         zone_dic = pickle.load(f)
@@ -98,7 +100,7 @@ def main():
                 pre_sample = prebooked_rate
                 p_pooling = pooling_rate
 
-                ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=7,
+                ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=hour,
                                                                                                               start_time=0,
                                                                                                               pre_sample=pre_sample,
                                                                                                               p_sample=args.demand_sample_rate,
@@ -112,7 +114,7 @@ def main():
                     q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t,
                                                         None, 0)
                     if order_pre is not None:
-                        assignment_pre, _ = assign(q_value)
+                        assignment_pre, _ = assign(q_value,pad=False)
                     else:
                         assignment_pre = [None] * worker.num
                     observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)

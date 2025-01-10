@@ -8,6 +8,7 @@ import pickle
 import numpy as np
 import random
 
+
 def get_args():
     parser = argparse.ArgumentParser(description='')
 
@@ -27,7 +28,7 @@ def get_args():
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
-    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[30.0,1.0,2.0,1.0,0.0,5.0,3.0])
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[10.0,1.0,1.0,1.0,0.0,1.0,1.0])
 
     parser.add_argument("--mode", type=int, default=2)
     parser.add_argument("--prebook_start", type=int, default=0)
@@ -36,6 +37,8 @@ def get_args():
     parser.add_argument("--rand_mode", action="store_true",default=False)
     parser.add_argument("--rand_rate", action="store_true",default=False)
     parser.add_argument("--rand_appear", action="store_true",default=False)
+
+    parser.add_argument("--hour", type=int, default=7)
 
 
     parser.add_argument('--dropout', type=float, default=0.0)
@@ -67,6 +70,8 @@ def main():
     args = get_args()
     device_name = "cuda:" + args.cuda
     device = torch.device(device_name if torch.cuda.is_available() and not args.cpu else 'cpu')
+
+    hour = args.hour
 
     train_list = []
     eval_list = []
@@ -193,7 +198,7 @@ def main():
 
         worker.reset(train=True, train_pre=train_pre, pre_rate=pre_sample, pooling_rate=p_pooling)
         platform.reset(discount_factor=args.gamma)
-        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = 7, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
+        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = hour, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
 
 
         if train_pre:
@@ -215,7 +220,7 @@ def main():
         for t in pbar:
             q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t, None, exploration_rate_temp1)
             if order_pre is not None:
-                assignment_pre, _ = assign(q_value)
+                assignment_pre, _ = assign(q_value,pad=False)
             else:
                 assignment_pre = [None] * worker.num
             observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)
@@ -348,7 +353,7 @@ def main():
 
             worker.reset(train=False, pre_rate=pre_sample, pooling_rate=p_pooling)
             platform.reset(discount_factor=args.gamma)
-            ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=7,
+            ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=hour,
                                                                                                           start_time=0,
                                                                                                           pre_sample=pre_sample,
                                                                                                           p_sample=args.demand_sample_rate,
@@ -364,7 +369,7 @@ def main():
                 q_value, order_pre = worker.observe(worker.Q_training_pre, demand.current_demand_pre, t,
                                                     None, 0)
                 if order_pre is not None:
-                    assignment_pre, _ = assign(q_value)
+                    assignment_pre, _ = assign(q_value,pad=False)
                 else:
                     assignment_pre = [None] * worker.num
                 observe_pre, order_pre = worker.update_pre(assignment_pre, order_pre)
