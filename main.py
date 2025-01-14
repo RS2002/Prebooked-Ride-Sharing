@@ -38,7 +38,7 @@ def get_args():
     parser.add_argument("--rand_rate", action="store_true",default=False)
     parser.add_argument("--rand_appear", action="store_true",default=False)
 
-    parser.add_argument("--hour", type=int, default=7)
+    parser.add_argument("--hour", type=int, default=18)
 
 
     parser.add_argument('--dropout', type=float, default=0.0)

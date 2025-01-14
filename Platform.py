@@ -41,7 +41,8 @@ def reward_func_generator(beta_list, threshold):
             r = beta_list[0] + beta_list[1] * direct_distance / 1000  - beta_list[2] * pickup_time / 60 - beta_list[3] * time_out - beta_list[4] * time_add / 60
         else:
             r = beta_list[0] + beta_list[1] * direct_distance / 1000  - beta_list[2] * pickup_time / 60 - beta_list[3] * time_out - beta_list[4] * time_add / 60 - beta_list[5] * (time_add-threshold) / 60
-        return r
+        profit = beta_list[0] + beta_list[1] * direct_distance / 1000 - beta_list[4] * time_add / 60
+        return r, profit
     return reward
 
 class Platform():
@@ -265,10 +266,11 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     original_total_travel_time = np.sum(current_order_state[:, 3])
                     time_add = np.sum(new_total_travel_time) - original_total_travel_time  # total added time of all orders
 
-                    reward_pick = reward_func(time_add,timeout,pick_pre_time2,direct_distance)
+                    reward_pick, profit = reward_func(time_add,timeout,pick_pre_time2,direct_distance)
                     reward_pre += reward_pick * reward_parameter_list[6]
 
-                    log["reward"] = reward_pick
+                    # log["reward"] = reward_pick
+                    log["reward"] = profit
                     log["wait"] = pick_pre_time2
                     log["pickup"] = pick_pre_time
                     log["workload"] = pick_pre_time + np.max(new_time) - np.max(current_order_state[:, 2])
@@ -301,10 +303,11 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                         time_add = np.sum(new_total_travel_time)
                         timeout = int(new_total_travel_time > time_threshold)
 
-                        reward_pick = reward_func(time_add, timeout, pick_pre_time2, direct_distance)
+                        reward_pick, profit = reward_func(time_add, timeout, pick_pre_time2, direct_distance)
                         reward_pre += reward_pick * reward_parameter_list[6]
 
-                        log["reward"] = reward_pick
+                        # log["reward"] = reward_pick
+                        log["reward"] = profit
                         log["wait"] = pick_pre_time2
                         log["pickup"] = pick_pre_time
                         log["workload"] = pick_pre_time + new_time[0]
@@ -388,11 +391,12 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
         original_total_travel_time = np.sum(current_order_state[:, 3])
         time_add = np.sum(new_total_travel_time) - original_total_travel_time  # total added time of all orders
         timeout = np.sum(new_total_travel_time > time_threshold)  # how many orders will be over time
-        reward = reward_func(time_add,timeout,pickup_time2,direct_distance)
+        reward, profit = reward_func(time_add,timeout,pickup_time2,direct_distance)
         if reward_pre is not None:
             reward_pre += reward * reward_parameter_list[4]
 
-        log["reward"] = reward
+        # log["reward"] = reward
+        log["reward"] = profit
         log["confirmation"] = waiting_time
         log["wait"] = pickup_time2
         log["pickup"] = pickup_time

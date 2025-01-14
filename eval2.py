@@ -53,7 +53,7 @@ def get_args():
 
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")
-    parser.add_argument("--hour", type=int, default=7)
+    parser.add_argument("--hour", type=int, default=18)
 
     args = parser.parse_args()
     return args
