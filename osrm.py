@@ -154,6 +154,8 @@ if __name__ == '__main__':
     destination_points = [(40.72375208451233, -73.97696827424141), (40.804333857858566,  -73.95129204385638), (40.804333857858566,  -73.99129204385638)]
     route, route_t, t, dis = TSP_route(origin_point, destination_points)
 
+    print(len(route))
+    print(len(route_t))
     print(route)
     print(route_t)
     print(t)
