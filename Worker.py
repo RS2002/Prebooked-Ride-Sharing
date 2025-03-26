@@ -145,9 +145,9 @@ class Buffer():
         order_num = torch.tensor([self.order_num[i] for i in indices]).to(device)
         action = torch.tensor([self.action[i] for i in indices]).to(device)
         delta_t = torch.tensor([self.delta_t[i] for i in indices]).to(device)
-        worker_state_next = torch.tensor([self.worker_state[i] for i in indices]).to(device)
-        order_state_next = torch.tensor([self.order_state[i] for i in indices]).to(device)
-        order_num_next = torch.tensor([self.order_num[i] for i in indices]).to(device)
+        worker_state_next = torch.tensor([self.worker_state_next[i] for i in indices]).to(device)
+        order_state_next = torch.tensor([self.order_state_next[i] for i in indices]).to(device)
+        order_num_next = torch.tensor([self.order_num_next[i] for i in indices]).to(device)
         action_next = torch.tensor([self.action_next[i] for i in indices]).to(device)
         reward = torch.tensor([self.reward[i] for i in indices]).to(device)
 
@@ -538,6 +538,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
     if assign_state != 0 or observe_space[9] >0:  # pick up
         if observe_space[9] > step:
             observe_space[9] -= step
+            step = 0
         else:
             step -= observe_space[9]
             observe_space[9] = 0
