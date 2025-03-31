@@ -8,20 +8,19 @@ import pickle
 import numpy as np
 import random
 
-
 def get_args():
     parser = argparse.ArgumentParser(description='')
 
-    parser.add_argument('--batch_size', type=int, default=512)
-    parser.add_argument('--train_times', type=int, default=20)
-    parser.add_argument('--lr', type=float, default=0.0005)
-    parser.add_argument('--gamma', type=float, default=0.9)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--train_times', type=int, default=15)
+    parser.add_argument('--lr', type=float, default=0.0001)
+    parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--max_step', type=int, default=60)
     parser.add_argument('--converge_epoch', type=int, default=10)
-    parser.add_argument('--minimum_episode', type=int, default=1000)
+    parser.add_argument('--minimum_episode', type=int, default=900)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=3e4)
-    parser.add_argument('--buffer_episode', type=int, default=10)
+    parser.add_argument('--buffer_capacity', type=int, default=5e5)
+    parser.add_argument('--buffer_episode', type=int, default=20)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_rate', type=float, default=0.80)
     parser.add_argument('--pooling_rate', type=float, default=0.80)
@@ -30,16 +29,15 @@ def get_args():
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
     parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[10.0,1.0,1.0,1.0,0.0,1.0,1.0])
 
-    parser.add_argument("--mode", type=int, default=2)
+    parser.add_argument("--mode", type=int, default=2) # 2 -> all pre-booked orders appear at (schedule_time-advance_time)
     parser.add_argument("--prebook_start", type=int, default=0)
     parser.add_argument("--prebook_end", type=int, default=0)
     parser.add_argument("--advance_time", type=int, default=30)
     parser.add_argument("--rand_mode", action="store_true",default=False)
-    parser.add_argument("--rand_rate", action="store_true",default=False)
-    parser.add_argument("--rand_appear", action="store_true",default=False)
+    parser.add_argument("--rand_rate", action="store_true",default=False) # random pre-booked & pooling rate
+    parser.add_argument("--rand_appear", action="store_true",default=False) # random pre-booked orders appearing time
 
-    parser.add_argument("--hour", type=int, default=18)
-
+    parser.add_argument("--hour", type=int, default=7)
 
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
@@ -60,8 +58,6 @@ def get_args():
 
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")
-
-    parser.add_argument("--follow", action="store_true",default=False)
 
     args = parser.parse_args()
     return args
@@ -91,14 +87,9 @@ def main():
     worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, bi_direction = args.bi_direction, dropout = args.dropout)
     reward_func = reward_func_generator(args.reward_parameter, args.order_threshold)
 
-    # best_reward = -100.0
     best_epoch = 0
     best_reward_on = -100.0
     best_reward_pre = -100.0
-
-    # flag_on = False
-    # flag_pre = False
-
 
     j = args.init_episode
     exploration_rate = max(exploration_rate * (epsilon_decay_rate**j), epsilon_final)
@@ -115,39 +106,11 @@ def main():
     rand_mode = args.rand_mode
 
     while True:
-
-        # if flag_on:
-        #     train_pre = False
-        # elif flag_pre:
-        #     train_pre = True
-        # else:
-        #     train_pre = not train_pre
-
         j += 1
-
 
         if rand_prop:
             pre_sample = random.random()
             p_pooling = random.random()
-
-            # p_pooling = random.randint(0,10)
-            # p_pooling = p_pooling * 0.1
-            # if train_pre:
-            #     pre_sample = random.randint(1,10)
-            #     # candidate = np.arange(1,11)
-            #     # temperature = j
-            #     # exp_prob = np.exp( - (candidate+1) / temperature)
-            #     # prob = exp_prob / np.sum(exp_prob)
-            #     # pre_sample = np.random.choice(candidate, p=prob)
-            # else:
-            #     pre_sample = random.randint(0,10)
-            #     # candidate = np.arange(0,11)
-            #     # temperature = j
-            #     # exp_prob = np.exp( - (candidate+1) / temperature)
-            #     # prob = exp_prob / np.sum(exp_prob)
-            #     # pre_sample = np.random.choice(candidate, p=prob)
-            # pre_sample = pre_sample * 0.1
-
             print("Pre-booked Rate: {:} , Pooling Rate: {:}".format(pre_sample,p_pooling))
         else:
             pre_sample = prebooked_rate
@@ -162,33 +125,7 @@ def main():
         if rand_appear:
             prebook_start = random.randint(0, 10)
             prebook_end = random.randint(prebook_start,20)
-
             advance_time = random.randint(10, 60)
-
-            # # # advance_time = random.randint(10,30)
-            # advance_time = random.randint(1, 6)
-            # advance_time = advance_time * 10
-            #
-            # # # Curriculum Learning
-            # # if train_pre:
-            # #     candidate = np.array([1, 2, 3, 4, 5, 6])
-            # #     # temperature = j
-            # #     temperature = j / 2
-            # #     exp_prob = np.exp(candidate / temperature)
-            # #     prob = exp_prob / np.sum(exp_prob)
-            # #     advance_time = np.random.choice(candidate, p=prob)
-            # #     advance_time = advance_time * 10
-            # # else:
-            # #     advance_time = random.randint(1, 6)
-            # #     advance_time = advance_time * 10
-            #
-            # # candidate = np.array([1, 2, 3, 4, 5, 6])
-            # # temperature = j
-            # # exp_prob = np.exp(candidate / temperature)
-            # # prob = exp_prob / np.sum(exp_prob)
-            # # advance_time = np.random.choice(candidate, p=prob)
-            # # advance_time = advance_time * 10
-
             print("Pre-booked Start Time: {:} , End Time: {:} , Advance Time {:}".format(prebook_start,prebook_end,advance_time))
         else:
             prebook_start = args.prebook_start
@@ -241,29 +178,33 @@ def main():
                                                 worker.schedule_pre, batch_size=args.batch_size,
                                                 train_times=1, show_pbar=False)
                         loss_pre_list.append(loss_pre)
+                        worker.update_Q_pre()
                 else:
                     if buffer.num > args.batch_size:
                         loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim, worker.schedule,
                                             batch_size=args.batch_size, train_times=1, show_pbar=False)
                         loss_list.append(loss)
+                        worker.update_Q_on()
 
         if train_pre:
             loss = 0
             # loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
             loss_pre = np.mean(loss_pre_list)
-            worker.update_Q_pre()
-            # worker.schedule_pre.step()
+            # worker.update_Q_pre()
+            worker.schedule_pre.step()
         else:
             # loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
             loss = np.mean(loss_list)
             loss_pre = 0
-            worker.update_Q_on()
-            # worker.schedule.step()
+            # worker.update_Q_on()
+            worker.schedule.step()
 
         total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
         drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
         drop_demand_rate = drop_demand / total_demand[2:]
         max_ultilization_rate = worker.max_ultilization_rate
+        total_ultilization_rate = np.mean(worker.start_flag)
+
         Pickup_Num = np.array(platform.Pickup_Num)
         Detour = np.array(platform.Detour)
         Overtime_num = np.array(platform.Overtime_num)
@@ -301,6 +242,7 @@ def main():
             'service_rate': service_rate,
             'drop_demand_rate': drop_demand_rate,
             'max_ultilization_rate': max_ultilization_rate,
+            'total_ultilization_rate': total_ultilization_rate,
             'average_detour': average_detour,
             'overtime_rate': overtime_rate,
             'overtime_average': overtime_average,
@@ -320,10 +262,6 @@ def main():
         with open('train.pkl', 'wb') as f:
             pickle.dump(train_list, f)
 
-        # if j % (2*args.eval_episode) == 0:
-        #     worker.update_Qtarget(1.0)
-
-
 
         if j % args.eval_episode == 0:
 
@@ -331,22 +269,9 @@ def main():
             buffer.reset()
             buffer_pre.reset()
 
-            # buffer.reset()
-            # if j % 30 == 0:
-            #     train_pre = False
-            #     buffer_pre.reset()
-            # elif train_pre == False:
-            #     train_pre = True
-            #     buffer_pre.reset()
-
-            # if j % (2 * args.eval_episode) == 0:
-            #     buffer.reset()
-            #     buffer_pre.reset()
-
             pre_sample = prebooked_rate
             p_pooling = pooling_rate
             mode = args.mode
-            # mode = 2
             prebook_start = args.prebook_start
             prebook_end = args.prebook_end
             advance_time = args.advance_time
@@ -392,6 +317,7 @@ def main():
             drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
             drop_demand_rate = drop_demand / total_demand[2:]
             max_ultilization_rate = worker.max_ultilization_rate
+            total_ultilization_rate = np.mean(worker.start_flag)
             Pickup_Num = np.array(platform.Pickup_Num)
             Detour = np.array(platform.Detour)
             Overtime_num = np.array(platform.Overtime_num)
@@ -428,6 +354,7 @@ def main():
                 'service_rate': service_rate,
                 'drop_demand_rate': drop_demand_rate,
                 'max_ultilization_rate': max_ultilization_rate,
+                'total_ultilization_rate': total_ultilization_rate,
                 'average_detour': average_detour,
                 'overtime_rate': overtime_rate,
                 'overtime_average': overtime_average,
@@ -446,70 +373,19 @@ def main():
             with open('eval.pkl', 'wb') as f:
                 pickle.dump(eval_list, f)
 
-
-            if args.follow:
-                reward_threshold_on = 2.0
-                reward_threshold_pre = 1.0
-                flag_pre = False
-                flag_on = False
-
-                if best_reward_pre - reward_pre > reward_threshold_pre:
-                    print(best_reward_pre,reward_pre)
-                    flag_pre = True
-                    # worker.load("latest.pth", "latest_pre.pth",device)
-                    # buffer.reset()
-                    # buffer_pre.reset()
-                    print("Train Pre-book Only!")
-                elif best_reward_on - reward > reward_threshold_on:
-                    print(best_reward_on,reward)
-                    flag_on = True
-                    # worker.load("latest.pth", "latest_pre.pth",device)
-                    # buffer.reset()
-                    # buffer_pre.reset()
-                    print("Train On-demand Only!")
-                else:
-                    # worker.save("latest.pth", "latest_pre.pth")
-                    if reward_pre < best_reward_pre and reward < best_reward_on:
-                      best_epoch += 1
-                      if j > args.minimum_episode and best_epoch >= args.converge_epoch:
-                            break
-                    else:
-                        worker.save("best.pth", "best_pre.pth")
-                        best_epoch = 0
-                        if reward_pre >= best_reward_pre:
-                            best_reward_pre = reward_pre
-                        if reward >= best_reward_on:
-                            best_reward_on = reward
+            if reward_pre < best_reward_pre and reward < best_reward_on:
+                best_epoch += 1
+                if j > args.minimum_episode and best_epoch >= args.converge_epoch:
+                    break
             else:
-                if reward_pre < best_reward_pre and reward < best_reward_on:
-                    best_epoch += 1
-                    if j > args.minimum_episode and best_epoch >= args.converge_epoch:
-                        break
-                else:
-                    worker.save("best.pth", "best_pre.pth")
-                    best_epoch = 0
-                    if reward_pre >= best_reward_pre:
-                        best_reward_pre = reward_pre
-                    if reward >= best_reward_on:
-                        best_reward_on = reward
+                worker.save("best.pth", "best_pre.pth")
+                best_epoch = 0
+                if reward_pre >= best_reward_pre:
+                    best_reward_pre = reward_pre
+                if reward >= best_reward_on:
+                    best_reward_on = reward
             if j == args.minimum_episode:
                 best_epoch = 0
-
-
-            # total_reward = reward + reward_pre * 2
-            # if total_reward > best_reward:
-            #     best_epoch = 0
-            #     best_reward = total_reward
-            #     worker.save("best.pth", "best_pre.pth")
-            # else:
-            #     best_epoch += 1
-            # if j == args.minimum_episode:
-            #     best_epoch = 0
-            # elif j > args.minimum_episode:
-            #     print("Converge Step: ", best_epoch)
-            #     if best_epoch >= args.converge_epoch:
-            #         break
-
 
             print()
 

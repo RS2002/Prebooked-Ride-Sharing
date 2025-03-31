@@ -128,8 +128,8 @@ class Buffer():
         self.episode.append(episode)
 
     def sample(self,size,device):
-        if self.num<10:
-            return None,None,None,None,None,None,None,None,None,None
+        # if self.num<10:
+        #     return None,None,None,None,None,None,None,None,None,None
 
         if size>self.num:
             size = self.num
@@ -162,7 +162,6 @@ class Worker():
         self.gamma = gamma
         self.gamma_pre = gamma
 
-
         self.device = device
         self.max_step = max_step
         self.num = num
@@ -189,8 +188,8 @@ class Worker():
         print('Platform total parameters:', 2 * sum(p.numel() for p in self.Q_training.parameters() if p.requires_grad))
         self.update_Qtarget(tau=1.0)
 
-        self.optim = torch.optim.Adam(self.Q_training.parameters(), lr=lr, weight_decay=0.01)
-        self.optim_pre = torch.optim.Adam(self.Q_training_pre.parameters(), lr=lr, weight_decay=0.01)
+        self.optim = torch.optim.Adam(self.Q_training.parameters(), lr=lr)#, weight_decay=0.01)
+        self.optim_pre = torch.optim.Adam(self.Q_training_pre.parameters(), lr=lr)#, weight_decay=0.01)
         self.schedule = torch.optim.lr_scheduler.ExponentialLR(self.optim, gamma=0.99)
         self.schedule_pre = torch.optim.lr_scheduler.ExponentialLR(self.optim_pre, gamma=0.99)
 
@@ -221,10 +220,8 @@ class Worker():
                 self.Q_target_pre.load_state_dict(torch.load(path2))
 
     def update_Qtarget(self, tau=0.005):
-        for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
-            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
-        for target_param, train_param in zip(self.Q_target_pre.parameters(), self.Q_training_pre.parameters()):
-            target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
+        self.update_Q_on(tau)
+        self.update_Q_pre(tau)
 
     def update_Q_on(self, tau=0.005):
         for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
@@ -380,11 +377,8 @@ class Worker():
             current_q_value = net_train(x1,x2,x3,order_num)
             current_q_value = torch.diag(current_q_value)
 
-            next_q_value1 = net_train(x1_next,x2_next,x3_next,order_num_next)
-            next_q_value1 = torch.diag(next_q_value1).detach()
-            next_q_value2 = net_target(x1_next,x2_next,x3_next,order_num_next)
-            next_q_value2 = torch.diag(next_q_value2).detach()
-            next_q_value = torch.min(next_q_value1,next_q_value2)
+            next_q_value = net_target(x1_next,x2_next,x3_next,order_num_next)
+            next_q_value = torch.diag(next_q_value).detach()
 
             is_done = (delta_t == -1).float()
 
@@ -393,12 +387,11 @@ class Worker():
             else:
                 target =  reward + (self.gamma_pre ** delta_t * next_q_value) * (1 - is_done)
 
-
             loss = self.loss_func(current_q_value.float(),target.float())
             optim.zero_grad()
             loss.backward()
 
-            # torch.nn.utils.clip_grad_norm_(net_train.parameters(), 1.0)  # avoid gradient explosion
+            torch.nn.utils.clip_grad_norm_(net_train.parameters(), 1.0)  # avoid gradient explosion
             has_nan = False
             for name, param in net_train.named_parameters():
                 if param.grad is not None:
@@ -545,39 +538,40 @@ def single_update(current_travel_route, current_travel_time, experience, experie
             if current_orders[0,4] == 0 and current_orders_num < current_orders.shape[0]:
                 observe_space[10] = 0  # available state
 
-    step_minute = step
-    step *= 60
+    if step > 0 and current_orders_num != 0:
+        step_minute = step
+        step *= 60
 
-    for i in range(len(current_travel_time)):
-        if step >= current_travel_time[i]:
-            step -= current_travel_time[i]
-        else:
-            current_travel_time[i] -= step
-            current_travel_time = current_travel_time[i:]
-            current_travel_route = current_travel_route[i:]
-            break
-        if i == len(current_travel_time) - 1:  # finish all orders
-            observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
-            current_travel_time = []
-            current_travel_route = []
+        for i in range(len(current_travel_time)):
+            if step >= current_travel_time[i]:
+                step -= current_travel_time[i]
+            else:
+                current_travel_time[i] -= step
+                current_travel_time = current_travel_time[i:]
+                current_travel_route = current_travel_route[i:]
+                break
+            if i == len(current_travel_time) - 1:  # finish all orders
+                observe_space[0], observe_space[1] = current_travel_route[-1][1], current_travel_route[-1][0]  # lat, lon
+                current_travel_time = []
+                current_travel_route = []
 
-    if len(current_travel_route) > 0:
-        observe_space[0], observe_space[1] = current_travel_route[0][1], current_travel_route[0][0]  # lat, lon
-    current_orders[:current_orders_num, 2] -= step_minute  # update remaining time
+        if len(current_travel_route) > 0:
+            observe_space[0], observe_space[1] = current_travel_route[0][1], current_travel_route[0][0]  # lat, lon
+        current_orders[:current_orders_num, 2] -= step_minute  # update remaining time
 
-    # delete finished orders
-    drop_index = np.zeros(current_orders.shape[0])
-    drop_index[:current_orders_num] = (current_orders[:current_orders_num, 2] <= 0)
-    drop_num = np.sum(drop_index)
-    if drop_num > 0:
-        current_orders_num -= drop_num
-        observe_space[8] += drop_num
-        observe_space[10] = 0  # available state
-        drop_index = drop_index.astype(bool)
-        finished_orders = current_orders[drop_index]
-        current_orders = current_orders[~drop_index]
-        fill_matrix = np.zeros_like(finished_orders)
-        current_orders = np.concatenate([current_orders, fill_matrix], axis=0)
+        # delete finished orders
+        drop_index = np.zeros(current_orders.shape[0])
+        drop_index[:current_orders_num] = (current_orders[:current_orders_num, 2] <= 0)
+        drop_num = np.sum(drop_index)
+        if drop_num > 0:
+            current_orders_num -= drop_num
+            observe_space[8] += drop_num
+            observe_space[10] = 0  # available state
+            drop_index = drop_index.astype(bool)
+            finished_orders = current_orders[drop_index]
+            current_orders = current_orders[~drop_index]
+            fill_matrix = np.zeros_like(finished_orders)
+            current_orders = np.concatenate([current_orders, fill_matrix], axis=0)
 
     return observe_space, current_orders, current_orders_num, current_travel_route, current_travel_time, experience, experience_pre, full_experience, full_experience_pre
 

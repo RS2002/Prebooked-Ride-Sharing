@@ -4,7 +4,7 @@
 
 
 
-The detail of the network structure can be found in [Double-PDF](https://github.com/RS2002/Double-PDF).
+The detail of the network structure can be found in [Double-PDF](https://github.com/RS2002/Double-PDF) and [Triple-BERT](https://github.com/RS2002/Triple-BERT).
 
 
 
