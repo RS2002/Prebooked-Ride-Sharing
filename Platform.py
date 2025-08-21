@@ -204,34 +204,34 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
             log["swap"] = 1
 
         if worker_type == 1: # if the worker is not available (current_order_num>=1)
-            # if order_pre_type == 0: # if the pre-booked order allows pooling
-            #     if current_order_state[0,4] == 0: # if the unfinished orders allow pooling
-            #         if current_order_num == current_order_state.shape[0]: # need to wait until having a new available seat
-            #             first_order_index = np.argmin(current_order_state[:, 2])
-            #             rest_finishing_time = current_order_state[first_order_index, 2]
-            #             dest_lat, dest_lon = current_order_state[first_order_index, 0], current_order_state[first_order_index, 1]
-            #             _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
-            #             pick_pre_time = pick_pre_time[0]
-            #             arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time  # when the worker can arrive the origin of pre-booked order
-            #         else: # need to wait until finishing current picking up
-            #             _, _, pick_pre_time, _ = TSP_route((curr_lat, curr_lon), [(observe[2], observe[3])])
-            #             pick_pre_time = pick_pre_time[0]
-            #             arrive_time = pick_pre_time + rest_picking_time + current_time
-            #     else: # if the unfinished orders does not allow pooling
-            #         # need to wait until the picked order finishes
-            #         rest_finishing_time = current_order_state[0, 2]
-            #         dest_lat, dest_lon = current_order_state[0, 0], current_order_state[0, 1]
-            #         _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
-            #         pick_pre_time = pick_pre_time[0]
-            #         arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time
-            # else: # if the pre-booked order does not allow pooling
-            #     # need to wait until all orders finish
-            #     last_order_index = np.argmax(current_order_state[:, 2])
-            #     rest_finishing_time = current_order_state[last_order_index, 2]
-            #     dest_lat, dest_lon = current_order_state[last_order_index, 0], current_order_state[last_order_index, 1]
-            #     _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
-            #     pick_pre_time = pick_pre_time[0]
-            #     arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time
+            if order_pre_type == 0: # if the pre-booked order allows pooling
+                if current_order_state[0,4] == 0: # if the unfinished orders allow pooling
+                    if current_order_num == current_order_state.shape[0]: # need to wait until having a new available seat
+                        first_order_index = np.argmin(current_order_state[:, 2])
+                        rest_finishing_time = current_order_state[first_order_index, 2]
+                        dest_lat, dest_lon = current_order_state[first_order_index, 0], current_order_state[first_order_index, 1]
+                        _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
+                        pick_pre_time = pick_pre_time[0]
+                        arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time  # when the worker can arrive the origin of pre-booked order
+                    else: # need to wait until finishing current picking up
+                        _, _, pick_pre_time, _ = TSP_route((curr_lat, curr_lon), [(observe[2], observe[3])])
+                        pick_pre_time = pick_pre_time[0]
+                        arrive_time = pick_pre_time + rest_picking_time + current_time
+                else: # if the unfinished orders does not allow pooling
+                    # need to wait until the picked order finishes
+                    rest_finishing_time = current_order_state[0, 2]
+                    dest_lat, dest_lon = current_order_state[0, 0], current_order_state[0, 1]
+                    _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
+                    pick_pre_time = pick_pre_time[0]
+                    arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time
+            else: # if the pre-booked order does not allow pooling
+                # need to wait until all orders finish
+                last_order_index = np.argmax(current_order_state[:, 2])
+                rest_finishing_time = current_order_state[last_order_index, 2]
+                dest_lat, dest_lon = current_order_state[last_order_index, 0], current_order_state[last_order_index, 1]
+                _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
+                pick_pre_time = pick_pre_time[0]
+                arrive_time = pick_pre_time + rest_finishing_time + rest_picking_time + current_time
 
             # if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
             #     reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6])
@@ -240,19 +240,19 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
             # else:
             #     reward_pre = 0
 
-            # if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
-            #     # reward_pre = - reward_parameter_list[7]
-            #     reward_pre = 0
-            #     if current_time > observe[6]:
-            #         reward_pre -= reward_parameter_list[8]
-            # else:
-            #     reward_pre = 0
-
-            # reward_pre = 0
-            if current_time >= observe[6]:
-                reward_pre = - reward_parameter_list[8]
+            if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
+                reward_pre = - reward_parameter_list[7]
+                # reward_pre = 0
+                if current_time > observe[6]:
+                    reward_pre -= reward_parameter_list[8]
             else:
                 reward_pre = 0
+
+            # # reward_pre = 0
+            # if current_time >= observe[6]:
+            #     reward_pre = - reward_parameter_list[8]
+            # else:
+            #     reward_pre = 0
 
             return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], None], None, None, None, None, assign_state, log  # in this circumstance, the assignment must be None
         else: # if the worker is available
@@ -261,9 +261,15 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                 pick_pre_time = pick_pre_time[0]
                 arrive_time = pick_pre_time + current_time
 
-                next_finish_time = np.min(current_order_state[:,2])
+                if current_order_num != 0:
+                    next_finish_index = np.argmin(current_order_state[:current_order_num, 2])
+                    _, _, pick_pre_time_new, _ = TSP_route((current_order_state[next_finish_index,0], current_order_state[next_finish_index,1]), [(observe[2], observe[3])])
+                    pick_pre_time_new = pick_pre_time_new[0]
+                    arrive_time_new = pick_pre_time_new + current_order_state[next_finish_index, 2] + current_time
+                else:
+                    arrive_time_new = 0
 
-                if (next_finish_time + arrive_time >= observe[6]) or ( (current_order_num==0) and (advance_time + arrive_time >= observe[6]) ): # start to pick up the pre-booked order
+                if (arrive_time_new >= observe[6]) or ( (current_order_num==0) and (advance_time + arrive_time >= observe[6]) ): # start to pick up the pre-booked order
                     assign_state = 1
                     if arrive_time > observe[6]:
                         reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6])
@@ -280,7 +286,10 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     new_route, new_route_time, new_time, _ = TSP_route((observe[2], observe[3]), destination_points)
                     new_total_travel_time = np.array(new_time)
                     new_total_travel_time[:-1] = new_total_travel_time[:-1] + current_order_state[:current_order_num, 3] - current_order_state[:current_order_num, 2]  # add the time already cost for each old order
-                    new_total_travel_time[:-1] = new_total_travel_time[:-1] + pick_pre_time
+
+                    pickup_time3 = max(pick_pre_time, observe[6] - current_time)
+                    new_total_travel_time[:-1] = new_total_travel_time[:-1] + pickup_time3
+
                     pick_pre_time2 = max(arrive_time - observe[6], 0) # the waiting time of pre-booked customer
                     new_total_travel_time[-1] = new_total_travel_time[-1] + pick_pre_time2
 
@@ -298,9 +307,8 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     log["pickup"] = pick_pre_time
                     log["workload"] = pick_pre_time + np.max(new_time) - np.max(current_order_state[:, 2])
                     log["direct"] = pick_pre_time + direct_time[0]
-                    log["detour"] = new_time[-1] - direct_time[0] + np.sum(new_time[:-1]) - np.sum(current_order_state[:, 2]) + pick_pre_time * current_order_num
+                    log["detour"] = new_time[-1] - direct_time[0] + np.sum(new_time[:-1]) - np.sum(current_order_state[:, 2]) + pickup_time3 * current_order_num
 
-                    pickup_time3 = max(pick_pre_time, observe[6] - current_time)
 
                     return [[[observe_pre, current_order_state, current_order_num], order_pre, [observe, current_order_state, current_order_num], None, current_time], [reward_pre, reward], pickup_time3], new_route, new_route_time, new_time, new_total_travel_time, assign_state, log  # in this circumstance, the assignment must be None
                 else:
@@ -347,12 +355,12 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                 else:
                     # need to wait until all orders finish
 
-                    # last_order_index = np.argmax(current_order_state[:, 2])
-                    # rest_finishing_time = current_order_state[last_order_index, 2]
-                    # dest_lat, dest_lon = current_order_state[last_order_index, 0], current_order_state[last_order_index, 1]
-                    # _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
-                    # pick_pre_time = pick_pre_time[0]
-                    # arrive_time = pick_pre_time + rest_finishing_time + current_time
+                    last_order_index = np.argmax(current_order_state[:, 2])
+                    rest_finishing_time = current_order_state[last_order_index, 2]
+                    dest_lat, dest_lon = current_order_state[last_order_index, 0], current_order_state[last_order_index, 1]
+                    _, _, pick_pre_time, _ = TSP_route((dest_lat, dest_lon), [(observe[2], observe[3])])
+                    pick_pre_time = pick_pre_time[0]
+                    arrive_time = pick_pre_time + rest_finishing_time + current_time
 
                     # if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
                     #     reward_pre = - reward_parameter_list[1] * (arrive_time - observe[6]) # currently, the worker may be still assigned an on-demand order
@@ -361,19 +369,19 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     # else:
                     #     reward_pre = 0
 
-                    # if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
-                    #     # reward_pre = - reward_parameter_list[7]
-                    #     reward_pre = 0
-                    #     if current_time > observe[6]:
-                    #         reward_pre -= reward_parameter_list[8]
-                    # else:
-                    #     reward_pre = 0
-
-                    # reward_pre = 0
-                    if current_time >= observe[6]:
-                        reward_pre = - reward_parameter_list[8]
+                    if arrive_time > observe[6]:  # add overtime punishment for pre-booked order
+                        reward_pre = - reward_parameter_list[7]
+                        # reward_pre = 0
+                        if current_time > observe[6]:
+                            reward_pre -= reward_parameter_list[8]
                     else:
                         reward_pre = 0
+
+                    # # reward_pre = 0
+                    # if current_time >= observe[6]:
+                    #     reward_pre = - reward_parameter_list[8]
+                    # else:
+                    #     reward_pre = 0
 
     if worker_type == 0 and assignment is not None: # assign on-demand order (worker_type must be 0)
         plat, plon, dlat, dlon, appear_time, type = new_orders_state[assignment]

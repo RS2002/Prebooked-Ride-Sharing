@@ -119,7 +119,8 @@ def main():
 
         worker.reset(train=True, train_pre=train_pre, pre_rate=pre_sample, pooling_rate=p_pooling)
         platform.reset(discount_factor=args.gamma)
-        day = random.randint(8,12)
+        # day = random.randint(8,12)
+        day = args.day
         ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = day, hour = hour, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
 
         if train_pre:
