@@ -10,16 +10,13 @@ import random
 
 def get_args():
     parser = argparse.ArgumentParser(description='')
-
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--train_times', type=int, default=15)
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--max_step', type=int, default=60)
-    parser.add_argument('--converge_epoch', type=int, default=10)
-    parser.add_argument('--minimum_episode', type=int, default=900)
+    parser.add_argument('--training_episode', type=int, default=1000)
     parser.add_argument('--worker_num', type=int, default=1000)
-    parser.add_argument('--buffer_capacity', type=int, default=5e5)
+    parser.add_argument('--buffer_capacity', type=int, default=1e8)
     parser.add_argument('--buffer_episode', type=int, default=20)
     parser.add_argument('--demand_sample_rate', type=float, default=0.95)
     parser.add_argument('--prebooked_rate', type=float, default=0.80)
@@ -27,8 +24,7 @@ def get_args():
     parser.add_argument('--order_max_wait_time', type=float, default=5.0)
     parser.add_argument('--order_threshold', type=float, default=40.0)
     parser.add_argument('--reward_parameter', type=float, nargs='+', default=[5.0,3.0,4.0,2.0,1.0,3.0])
-    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[10.0,1.0,1.0,1.0,0.0,1.0,1.0])
-
+    parser.add_argument('--reward_parameter2', type=float, nargs='+', default=[10.0,3.0,1.0,1.0,0.0,1.0,1.0,1.0,3.0])
     parser.add_argument("--mode", type=int, default=2) # 2 -> all pre-booked orders appear at (schedule_time-advance_time)
     parser.add_argument("--prebook_start", type=int, default=0)
     parser.add_argument("--prebook_end", type=int, default=0)
@@ -36,29 +32,22 @@ def get_args():
     parser.add_argument("--rand_mode", action="store_true",default=False)
     parser.add_argument("--rand_rate", action="store_true",default=False) # random pre-booked & pooling rate
     parser.add_argument("--rand_appear", action="store_true",default=False) # random pre-booked orders appearing time
-
-    parser.add_argument("--hour", type=int, default=7)
-
+    parser.add_argument("--day", type=int, default=1)
+    parser.add_argument("--hour", type=int, default=18)
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument("--bi_direction", action="store_true",default=False)
     parser.add_argument('--eval_episode', type=int, default=10)
-
     parser.add_argument('--epsilon', type=float, default=1.0)
     parser.add_argument('--epsilon_decay_rate', type=float, default=0.99)
     parser.add_argument('--epsilon_final', type=float, default=0.0005)
-
     parser.add_argument("--cpu", action="store_true",default=False)
     parser.add_argument("--cuda", type=str, default='0')
-
     parser.add_argument('--init_episode', type=int, default=0)
-    parser.add_argument('--njobs', type=int, default=24)
-
+    parser.add_argument('--njobs', type=int, default=12)
     parser.add_argument("--model_path",type=str,default=None)
     parser.add_argument("--model_pre_path",type=str,default=None)
-
     parser.add_argument("--demand_path",type=str,default="../data/yellow_tripdata_2024-07.parquet")
     parser.add_argument("--zone_dic_path",type=str,default="../data/Manhattan_dic.pkl")
-
     args = parser.parse_args()
     return args
 
@@ -87,10 +76,6 @@ def main():
     worker = Worker(buffer, buffer_pre, lr=args.lr, gamma=args.gamma, max_step=args.max_step, num=args.worker_num, device=device, zone_table_path = args.zone_dic_path, model_path = args.model_path, model_pre_path = args.model_pre_path, njobs = args.njobs, bi_direction = args.bi_direction, dropout = args.dropout)
     reward_func = reward_func_generator(args.reward_parameter, args.order_threshold)
 
-    best_epoch = 0
-    best_reward_on = -100.0
-    best_reward_pre = -100.0
-
     j = args.init_episode
     exploration_rate = max(exploration_rate * (epsilon_decay_rate**j), epsilon_final)
 
@@ -105,7 +90,7 @@ def main():
     rand_appear = args.rand_appear
     rand_mode = args.rand_mode
 
-    while True:
+    while j < args.training_episode:
         j += 1
 
         if rand_prop:
@@ -125,18 +110,17 @@ def main():
         if rand_appear:
             prebook_start = random.randint(0, 10)
             prebook_end = random.randint(prebook_start,20)
-            advance_time = random.randint(10, 60)
+            advance_time = random.randint(10, 30)
             print("Pre-booked Start Time: {:} , End Time: {:} , Advance Time {:}".format(prebook_start,prebook_end,advance_time))
         else:
             prebook_start = args.prebook_start
             prebook_end = args.prebook_end
             advance_time = args.advance_time
 
-
         worker.reset(train=True, train_pre=train_pre, pre_rate=pre_sample, pooling_rate=p_pooling)
         platform.reset(discount_factor=args.gamma)
-        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = 1, hour = hour, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
-
+        day = random.randint(8,12)
+        ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day = day, hour = hour, start_time = 0,  pre_sample = pre_sample, p_sample = args.demand_sample_rate, p_pooling = p_pooling, prebook_start = prebook_start, prebook_end = prebook_end, wait_time = args.order_max_wait_time, mode = mode, advance_time = advance_time)
 
         if train_pre:
             exploration_rate_pre = max(exploration_rate_pre * epsilon_decay_rate, epsilon_final)
@@ -144,13 +128,11 @@ def main():
             exploration_rate_temp2 = 0
         else:
             exploration_rate_temp1 = 0
-            exploration_rate_on = max(exploration_rate_on * (epsilon_decay_rate), epsilon_final)
+            exploration_rate_on = max(exploration_rate_on * epsilon_decay_rate, epsilon_final)
             exploration_rate_temp2 = exploration_rate_on
-
 
         print("Exploration Rate: ", exploration_rate_temp1, exploration_rate_temp2)
         pbar = tqdm.tqdm(range(args.max_step))
-
         loss_list = []
         loss_pre_list = []
 
@@ -171,39 +153,36 @@ def main():
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
 
-            if (t+1) % 3 == 0:
+            if (t+1) % 4 == 0:
                 if train_pre:
                     if buffer_pre.num > args.batch_size:
                         loss_pre = worker.train(buffer_pre, worker.Q_training_pre, worker.Q_target_pre, worker.optim_pre,
-                                                worker.schedule_pre, batch_size=args.batch_size,
-                                                train_times=1, show_pbar=False)
+                                                batch_size=args.batch_size, train_times=1, show_pbar=False)
                         loss_pre_list.append(loss_pre)
                         worker.update_Q_pre()
                 else:
                     if buffer.num > args.batch_size:
-                        loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim, worker.schedule,
+                        loss = worker.train(buffer, worker.Q_training, worker.Q_target, worker.optim,
                                             batch_size=args.batch_size, train_times=1, show_pbar=False)
                         loss_list.append(loss)
                         worker.update_Q_on()
 
         if train_pre:
             loss = 0
-            # loss_pre = worker.train(buffer_pre,worker.Q_training_pre,worker.Q_target_pre,worker.optim_pre,worker.schedule_pre,batch_size=args.batch_size,train_times=args.train_times)
             loss_pre = np.mean(loss_pre_list)
-            # worker.update_Q_pre()
             worker.schedule_pre.step()
         else:
-            # loss = worker.train(buffer,worker.Q_training,worker.Q_target,worker.optim,worker.schedule,batch_size=args.batch_size,train_times=args.train_times)
             loss = np.mean(loss_list)
             loss_pre = 0
-            # worker.update_Q_on()
             worker.schedule.step()
 
-        total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling]) # + 1e-8
+        train_pre = not train_pre
+
+        total_demand = np.array([prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling])
         drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
         drop_demand_rate = drop_demand / total_demand[2:]
-        max_ultilization_rate = worker.max_ultilization_rate
-        total_ultilization_rate = np.mean(worker.start_flag)
+        max_utilization_rate = worker.max_utilization_rate
+        total_utilization_rate = np.mean(worker.start_flag)
 
         Pickup_Num = np.array(platform.Pickup_Num)
         Detour = np.array(platform.Detour)
@@ -215,8 +194,6 @@ def main():
         overtime_rate = (Overtime_num + (total_demand[:2] - Pickup_Num[:2])) / total_demand[:2]
         reward = platform.Total_Reward / args.worker_num
         reward_pre = platform.Total_Reward_Pre / args.worker_num
-
-        # idle_time = worker.idle_time
         idle_time = worker.waiting_time_list
         idle_time = np.mean(idle_time)
         pickup_time = np.array(platform.Pickup_Time)
@@ -227,7 +204,7 @@ def main():
         swap_rate = platform.Swap / (platform.Assigment + 1e-8)
 
 
-        print("Train Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Ultilizationb Rate {:}, Swap Rate {:},  On-demand Loss {:}, Pre-booked Loss {:}".format(j, reward, reward_pre,total_reward,idle_time, max_ultilization_rate, swap_rate, loss, loss_pre))
+        print("Train Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Utilization Rate {:}, Swap Rate {:},  On-demand Loss {:}, Pre-booked Loss {:}".format(j, reward, reward_pre,total_reward,idle_time, max_utilization_rate, swap_rate, loss, loss_pre))
         print("Service Rate: ", service_rate)
         print("Loss Demand: ", drop_demand_rate)
         print("Average Detour: ", average_detour)
@@ -236,13 +213,13 @@ def main():
         print("Pickup Time: ", pickup_time)
         print("Unit Reward: ", unit_reward)
         print()
-        worker.save("latest.pth", "latest_pre.pth")
+        worker.save("model.pth", "model_pre.pth")
         dic = {
             'episode': j,
             'service_rate': service_rate,
             'drop_demand_rate': drop_demand_rate,
-            'max_ultilization_rate': max_ultilization_rate,
-            'total_ultilization_rate': total_ultilization_rate,
+            'max_utilization_rate': max_utilization_rate,
+            'total_utilization_rate': total_utilization_rate,
             'average_detour': average_detour,
             'overtime_rate': overtime_rate,
             'overtime_average': overtime_average,
@@ -265,20 +242,17 @@ def main():
 
         if j % args.eval_episode == 0:
 
-            train_pre = not train_pre
-            buffer.reset()
-            buffer_pre.reset()
-
             pre_sample = prebooked_rate
             p_pooling = pooling_rate
             mode = args.mode
             prebook_start = args.prebook_start
             prebook_end = args.prebook_end
             advance_time = args.advance_time
+            day = args.day
 
             worker.reset(train=False, pre_rate=pre_sample, pooling_rate=p_pooling)
             platform.reset(discount_factor=args.gamma)
-            ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=1, hour=hour,
+            ondemand_pooling, ondemand_nonpooling, prebooked_pooling, prebooked_nonpooling = demand.reset(day=day, hour=hour,
                                                                                                           start_time=0,
                                                                                                           pre_sample=pre_sample,
                                                                                                           p_sample=args.demand_sample_rate,
@@ -316,8 +290,8 @@ def main():
                 [prebooked_pooling, prebooked_nonpooling, ondemand_pooling, ondemand_nonpooling])  # + 1e-8
             drop_demand = np.array([demand.num_lost_demand_pooling, demand.num_lost_demand_nonpooling])
             drop_demand_rate = drop_demand / total_demand[2:]
-            max_ultilization_rate = worker.max_ultilization_rate
-            total_ultilization_rate = np.mean(worker.start_flag)
+            max_utilization_rate = worker.max_utilization_rate
+            total_utilization_rate = np.mean(worker.start_flag)
             Pickup_Num = np.array(platform.Pickup_Num)
             Detour = np.array(platform.Detour)
             Overtime_num = np.array(platform.Overtime_num)
@@ -328,8 +302,6 @@ def main():
             overtime_rate = (Overtime_num + (total_demand[:2] - Pickup_Num[:2])) / total_demand[:2]
             reward = platform.Total_Reward / args.worker_num
             reward_pre = platform.Total_Reward_Pre / args.worker_num
-
-            # idle_time = worker.idle_time
             idle_time = worker.waiting_time_list
             idle_time = np.mean(idle_time)
             pickup_time = np.array(platform.Pickup_Time)
@@ -339,8 +311,8 @@ def main():
             unit_reward = type_reward / Pickup_Num
             swap_rate = platform.Swap / (platform.Assigment + 1e-8)
             print(
-                "Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Ultilizationb Rate {:}, Swap Rate {:}".format(
-                    j, reward, reward_pre, total_reward, idle_time, max_ultilization_rate, swap_rate))
+                "Eval Episode {:}, On-demand Reward {:}, Pre-booked Reward {:}, Total Reward {:}, Idle Time {:}, Utilizationb Rate {:}, Swap Rate {:}".format(
+                    j, reward, reward_pre, total_reward, idle_time, max_utilization_rate, swap_rate))
             print("Service Rate: ", service_rate)
             print("Loss Demand: ", drop_demand_rate)
             print("Average Detour: ", average_detour)
@@ -353,8 +325,8 @@ def main():
                 'episode': j,
                 'service_rate': service_rate,
                 'drop_demand_rate': drop_demand_rate,
-                'max_ultilization_rate': max_ultilization_rate,
-                'total_ultilization_rate': total_ultilization_rate,
+                'max_utilization_rate': max_utilization_rate,
+                'total_utilization_rate': total_utilization_rate,
                 'average_detour': average_detour,
                 'overtime_rate': overtime_rate,
                 'overtime_average': overtime_average,
@@ -372,20 +344,6 @@ def main():
             eval_list.append(dic)
             with open('eval.pkl', 'wb') as f:
                 pickle.dump(eval_list, f)
-
-            if reward_pre < best_reward_pre and reward < best_reward_on:
-                best_epoch += 1
-                if j > args.minimum_episode and best_epoch >= args.converge_epoch:
-                    break
-            else:
-                worker.save("best.pth", "best_pre.pth")
-                best_epoch = 0
-                if reward_pre >= best_reward_pre:
-                    best_reward_pre = reward_pre
-                if reward >= best_reward_on:
-                    best_reward_on = reward
-            if j == args.minimum_episode:
-                best_epoch = 0
 
             print()
 

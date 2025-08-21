@@ -1,16 +1,12 @@
-# D³QN
+# Mixture of On-demand and Pre-booked Ride Sharing System
 
-**Article:** "Ride-hailing Vehicle Dispatching with a Mixture of On-demand and Pre-booked Requests: A Multi-Action and Multi-Agent Reinforcement Learning Approach"
-
-
-
-The detail of the network structure can be found in [Double-PDF](https://github.com/RS2002/Double-PDF) and [Triple-BERT](https://github.com/RS2002/Triple-BERT).
+**Article:** "Ride-sharing Vehicle Dispatching with a Mixture of On-demand and Pre-booked Requests: A Multi-Agent Reinforcement Learning Approach" (under way)
 
 
 
 ## 1. Workflow
 
-![](./img/main.png)
+TODO
 
 
 
@@ -19,8 +15,6 @@ The detail of the network structure can be found in [Double-PDF](https://github.
 ### 2.1 Dataset
 
 In our paper, we utilize the yellow taxi data from July 1, 2024, between 7:00 and 8:00 AM in Manhattan, sourced from [TLC Trip Record Data - TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page). Both the raw data and our processed results are stored in the `./data` folder. You can easily modify the time settings in `main.py` to train or evaluate the model for different time periods. However, if you wish to use data from other districts, you'll need to preprocess it according to the steps outlined in `./data/Manhattan_dic.py`. Additionally, you will need to adjust the `norm` function in `Worker.py` to set the appropriate range for latitude and longitude. While it's possible to skip normalization, doing so may negatively impact performance.
-
-
 
 ### 2.2 OSRM
 
@@ -43,29 +37,23 @@ The simulation parameters in our paper are as follows:
 
 You can modify these settings by editing the `Order_Env.py` file. Additionally, the order distribution and appearance times can be adjusted using parameters in argparse as shown below.
 
-
-
 ### 3.1 Train
 
 #### 3.1.1 Train for a General Strategy
 
-```shell
-python main.py --rand_rate --rand_appear
-```
-
 In this mode, the proportions of pre-booked orders, pooling orders, and the appearance times of pre-booked orders are randomized in each episode. This approach helps develop a robust strategy with minimal performance sacrifice.
 
-
-
-To achieve optimal performance for specific conditions, you can train the model using the following command:
+```shell
+python main.py --bi_direction --rand_rate --rand_appear
+```
 
 #### 3.1.2 Train for a Specific Strategy
 
+To achieve optimal performance for specific conditions, you can train the model using the following command:
+
 ```shell
-python main.py --prebook_start <time when pre-booked orders start to appear> --prebook_end <time when all pre-booked orders have appeared> --pooling_rate <proportion of customers choosing pooling> --prebooked_rate <proportion of pre-booked orders in total orders>
+python main.py --advance_time <time when pre-booked orders start to appear in adavance> --pooling_rate <proportion of customers choosing pooling> --prebooked_rate <proportion of pre-booked orders in total orders>
 ```
-
-
 
 
 

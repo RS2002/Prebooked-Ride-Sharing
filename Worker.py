@@ -204,20 +204,13 @@ class Worker():
         torch.save(self.Q_training_pre.state_dict(), path2)
 
     def load(self, path1=None, path2=None, device=torch.device("cpu")):
-        if device == torch.device("cpu"):
-            if path1 is not None:
-                self.Q_target.load_state_dict(torch.load(path1, map_location=torch.device('cpu')))
-                self.Q_training.load_state_dict(torch.load(path1, map_location=torch.device('cpu')))
-            if path2 is not None:
-                self.Q_training_pre.load_state_dict(torch.load(path2, map_location=torch.device('cpu')))
-                self.Q_target_pre.load_state_dict(torch.load(path2, map_location=torch.device('cpu')))
-        else:
-            if path1 is not None:
-                self.Q_target.load_state_dict(torch.load(path1))
-                self.Q_training.load_state_dict(torch.load(path1))
-            if path2 is not None:
-                self.Q_training_pre.load_state_dict(torch.load(path2))
-                self.Q_target_pre.load_state_dict(torch.load(path2))
+        if path1 is not None:
+            self.Q_target.load_state_dict(torch.load(path1, map_location=device))
+            self.Q_training.load_state_dict(torch.load(path1, map_location=device))
+        if path2 is not None:
+            self.Q_training_pre.load_state_dict(torch.load(path2, map_location=device))
+            self.Q_target_pre.load_state_dict(torch.load(path2, map_location=device))
+
 
     def update_Qtarget(self, tau=0.005):
         self.update_Q_on(tau)
@@ -255,10 +248,11 @@ class Worker():
         9: remaining picking time
         10: state -- 0 allows to pick up new orders, 1 does not (because picking up the order that doesn't allow pooling or the capacity is full)
         11: current time
+        12: pre-booked rate
+        13: pooling rate
         '''
         self.observe_space = np.zeros([self.num, 14])
         self.observe_space[:,8] = capacity
-
         self.observe_space[:,12] = self.pre_rate
         self.observe_space[:,13] = self.pooling_rate
 
@@ -285,15 +279,17 @@ class Worker():
 
         # some logs
         self.idle_time = np.zeros([self.num])
-        self.max_ultilization_rate = 0
+        self.max_utilization_rate = 0
         self.waiting_time_list = []
         self.waiting_time = np.zeros([self.num])
+
+        self.Pass_Travel_Time = []
         self.start_flag = np.zeros([self.num])
 
     def observe(self, network, order, current_time, order_future = None, exploration_rate=0):
         # 0. process order state
-        pid = order['PULocationID']
-        did = order['DOLocationID']
+        pid = np.array(order['PULocationID'],dtype=int)
+        did = np.array(order['DOLocationID'],dtype=int)
         if len(pid) == 0:
             order = None
         else:
@@ -312,8 +308,8 @@ class Worker():
             order = np.concatenate([plat,plon,dlat,dlon,minute,type],axis=-1)
 
         if order_future is not None:
-            pid = order_future['PULocationID']
-            did = order_future['DOLocationID']
+            pid = np.array(order_future['PULocationID'], dtype=int)
+            did = np.array(order_future['DOLocationID'], dtype=int)
             if len(pid) != 0:
                 pid = self.zone_map[pid - 1]
                 did = self.zone_map[did - 1]
@@ -358,7 +354,7 @@ class Worker():
 
         return q_value.cpu().detach().numpy(), order
 
-    def train(self,buffer,net_train,net_target,optim,schedule,batch_size=512,train_times=10,show_pbar=True):
+    def train(self,buffer,net_train,net_target,optim,batch_size=512,train_times=10,show_pbar=True):
         torch.set_grad_enabled(True)
         net_train.train()
         if show_pbar:
@@ -403,7 +399,6 @@ class Worker():
 
             optim.step()
             loss_list.append(loss.item())
-        # schedule.step()
         return np.mean(loss_list)
 
     def update_pre(self, assignment, order_pre):
@@ -463,9 +458,9 @@ class Worker():
                         self.buffer.append(self.experience[i], episode)
 
 
-        ultilization_rate = np.sum(self.current_order_num!=0) / self.num
-        if ultilization_rate > self.max_ultilization_rate:
-            self.max_ultilization_rate = ultilization_rate
+        utilization_rate = np.sum(self.current_order_num!=0) / self.num
+        if utilization_rate > self.max_utilization_rate:
+            self.max_utilization_rate = utilization_rate
 
 def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route ,new_route_time ,new_remaining_time ,new_total_travel_time, assign_state):
     full_experience = None
