@@ -149,8 +149,8 @@ def main():
                 assignment, _ = assign(q_value)
             else:
                 assignment = [None] * worker.num
-            feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on = platform.feedback(observe_pre, order_pre, assignment_pre, worker.observe_space, worker.current_orders, worker.current_order_num, assignment, order, args.order_max_wait_time, reward_func, args.reward_parameter2, t)
-            worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
+            feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on, global_reward = platform.feedback(observe_pre, order_pre, assignment_pre, worker.observe_space, worker.current_orders, worker.current_order_num, assignment, order, args.order_max_wait_time, reward_func, args.reward_parameter2, t)
+            worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j, global_reward)
             demand.pickup(accepted_on, accepted_pre)
             demand.update()
 
@@ -278,12 +278,12 @@ def main():
                     assignment, _ = assign(q_value)
                 else:
                     assignment = [None] * worker.num
-                feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on = platform.feedback(
+                feedback_table, new_route_table, new_route_time_table, new_remaining_time_table, new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on, global_reward = platform.feedback(
                     observe_pre, order_pre, assignment_pre, worker.observe_space, worker.current_orders,
                     worker.current_order_num, assignment, order, args.order_max_wait_time, reward_func,
                     args.reward_parameter2, t)
                 worker.update(feedback_table, new_route_table, new_route_time_table, new_remaining_time_table,
-                              new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j)
+                              new_total_travel_time_table, assign_state_table, (t == args.max_step - 1), j, global_reward)
                 demand.pickup(accepted_on, accepted_pre)
                 demand.update()
 

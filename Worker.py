@@ -413,10 +413,10 @@ class Worker():
                 self.observe_space[i,2:8] = order_pre[assignment[i]]
         return observe_pre, order
 
-    def update(self, feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, final_step=False, episode=1):
+    def update(self, feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, final_step=False, episode=1, global_reward=0):
         # update each worker state parallely
         results = Parallel(n_jobs=self.njobs)(
-            delayed(single_update)(self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i], feedback_table[i], new_route_table[i], new_route_time_table[i], new_remaining_time_table[i], new_total_travel_time_table[i], assign_state_table[i])
+            delayed(single_update)(self.travel_route[i], self.travel_time[i], self.experience[i], self.experience_pre[i], feedback_table[i], new_route_table[i], new_route_time_table[i], new_remaining_time_table[i], new_total_travel_time_table[i], assign_state_table[i], global_reward)
             for i in range(self.num))
 
         for i in range(len(results)):
@@ -462,7 +462,7 @@ class Worker():
         if utilization_rate > self.max_utilization_rate:
             self.max_utilization_rate = utilization_rate
 
-def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route ,new_route_time ,new_remaining_time ,new_total_travel_time, assign_state):
+def single_update(current_travel_route, current_travel_time, experience, experience_pre, feedback, new_route ,new_route_time ,new_remaining_time ,new_total_travel_time, assign_state, global_reward):
     full_experience = None
     full_experience_pre = None
 
@@ -482,7 +482,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
             experience_pre = []
         experience_pre.append(feedback[0])  # s_current
         experience_pre.append(feedback[1])  # a_current
-        experience_pre.append(reward_pre)  # r
+        experience_pre.append(reward_pre + global_reward)  # r
 
     if reward is not None:
         if len(experience) > 0:
@@ -493,7 +493,7 @@ def single_update(current_travel_route, current_travel_time, experience, experie
             experience = []
         experience.append(feedback[2])  # s_current
         experience.append(feedback[3])  # a_current
-        experience.append(reward)  # r
+        experience.append(reward + global_reward)  # r
 
     # 2. update state
     observe_space, current_orders, current_orders_num = feedback[2]
