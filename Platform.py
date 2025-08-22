@@ -81,8 +81,6 @@ class Platform():
         accepted_pre = [] # number of picked pre-booked orders
         accepted_on = [] # number of picked on-demand orders
 
-        global_reward = 0
-
         results = Parallel(n_jobs=self.njobs)(
             delayed(excute)(observe_pre[i], order_pre[i], observe[i], current_order_state[i], current_order_num[i], assignment[i], new_orders_state, time_threshold, reward_func, reward_parameter_list, current_time)
             for i
@@ -165,14 +163,10 @@ class Platform():
             reward_pre, reward = result[0][1]
             if reward_pre is not None:
                 self.Total_Reward_Pre += reward_pre * self.discount_factor_pre**current_time
-                global_reward += reward_pre
             if reward is not None:
                 self.Total_Reward += reward * self.discount_factor**current_time
-                global_reward += reward
 
-        global_reward /= len(results)
-
-        return feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on, global_reward
+        return feedback_table, new_route_table ,new_route_time_table ,new_remaining_time_table ,new_total_travel_time_table, assign_state_table, accepted_pre, accepted_on
 
 '''
 reward_parameter_list: 
@@ -390,7 +384,7 @@ def excute(observe_pre, order_pre, observe, current_order_state, current_order_n
                     #     reward_pre = 0
 
     if worker_type == 0 and assignment is not None: # assign on-demand order (worker_type must be 0)
-        plat, plon, dlat, dlon, appear_time, type = new_orders_state[assignment]
+        plat, plon, dlat, dlon, appear_time, type, _ = new_orders_state[assignment]
         waiting_time = current_time - appear_time
 
         pickup_route, pickup_route_t, pickup_time, _ = TSP_route((curr_lat, curr_lon), [(plat, plon)])

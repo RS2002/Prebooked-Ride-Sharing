@@ -84,8 +84,6 @@ class BiLSTM(nn.Module):
 class Attention(nn.Module):
     def __init__(self, input_dims=64, hidden_dims=64, head=1, dropout=0.0, method="mean"):
         super().__init__()
-        # self.q_emb = MLP([input_dims,hidden_dims,1])
-        # self.k_emb = MLP([input_dims,hidden_dims,1])
         self.q_linear = nn.ModuleList()
         self.k_linear = nn.ModuleList()
         for i in range(int(head)):
@@ -93,35 +91,26 @@ class Attention(nn.Module):
             self.k_linear.append(MLP([input_dims,hidden_dims*2,hidden_dims*4], dropout=dropout))
         self.head = head
         self.method = method
-        # self.softplus = nn.Softplus()
-        # self.relu = nn.ReLU()
         if self.method != "mean":
             self.fuse_layer = MLP([head,head,1], dropout=dropout)
 
     def forward(self,q,k):
         attn_matrix = None
 
-        # q_result = self.q_emb(q)
-        # k_result = self.k_emb(k)
-        # k_result = k_result.T
-        # q_result = q_result.expand(-1,k.shape[0])
-        # k_result = k_result.expand(q.shape[0],-1)
-
         for i in range(self.head):
             query=self.q_linear[i](q)
             key=self.k_linear[i](k)
 
-            # key = self.softplus(key)
             key = key ** 2
-            # key = self.relu(key)
             norms = torch.norm(key, dim=1, keepdim=True) + 1e-8
             key = key / norms
-            # key = torch.abs(key)
+            # query = query ** 2
+            # norms = torch.norm(query, dim=1, keepdim=True) + 1e-8
+            # query = query / norms
 
             attn = torch.mm(query,key.T)
             if self.head == 1:
                 return attn
-                # return attn + q_result + k_result
 
             attn = attn.unsqueeze(-1)
             if attn_matrix is None:
@@ -135,19 +124,18 @@ class Attention(nn.Module):
             attn_matrix = self.fuse_layer(attn_matrix)
             attn_matrix = attn_matrix.squeeze(-1)
         return attn_matrix
-        # return attn_matrix + q_result + k_result
 
 
 class Worker_Net(nn.Module):
     def __init__(self, state_size, order_size, output_dim=64, bi_direction=False, dropout=0.0):
         super().__init__()
         if bi_direction:
-            self.lstm = BiLSTM(order_size,output_dim, dropout=dropout)
+            self.lstm = BiLSTM(order_size, output_dim, dropout=dropout)
         else:
-            self.lstm = LSTM(order_size,output_dim, dropout=dropout)
+            self.lstm = LSTM(order_size, output_dim, dropout=dropout)
 
         self.encode = MLP([state_size - 6,output_dim,output_dim], arl=True, dropout=dropout)
-        self.mask = nn.Parameter(torch.randn([output_dim]))
+        self.mask = nn.Parameter(torch.randn([output_dim]),requires_grad=True)
         self.encode2 = MLP([6,output_dim,output_dim], arl=True, dropout=dropout)
         self.mlp = MLP([output_dim*3,output_dim*2,output_dim], dropout=dropout)
 
@@ -180,7 +168,8 @@ class Q_Net(nn.Module):
         super().__init__()
         self.worker_net = Worker_Net(state_size=state_size, order_size=history_order_size, output_dim=hidden_dim, bi_direction=bi_direction, dropout=dropout)
         self.order_net = Order_Net(state_size=current_order_size, output_size=hidden_dim, dropout=dropout)
-        self.attention = Attention(input_dims=hidden_dim,hidden_dims=hidden_dim,head=head, dropout=dropout)
+        self.order_net_pre = Order_Net(state_size=current_order_size, output_size=hidden_dim, dropout=dropout)
+        self.attention = Attention(input_dims=hidden_dim, hidden_dims=hidden_dim, head=head, dropout=dropout)
 
     def forward(self,order,x_state,x_order,order_num=None):
         order_num = order_num.int()
@@ -188,8 +177,13 @@ class Q_Net(nn.Module):
         x_state = x_state.float()
         x_order = x_order.float()
 
-        order = self.order_net(order)
+        order_on = self.order_net(order)
+        order_pre = self.order_net_pre(order)
+        order_type = order[...,-1:]
+        order = order_pre * order_type + order_on * (1 - order_type)
+        # order = self.order_net(order)
         worker = self.worker_net(x_state,x_order,order_num)
+
         q_matrix = self.attention(worker,order)
 
         return q_matrix
