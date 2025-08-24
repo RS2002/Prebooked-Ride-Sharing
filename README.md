@@ -6,9 +6,9 @@
 
 ## 1. Workflow
 
-TODO
+![](./img/workflow.png)
 
-
+![](./img/on-demand.png)
 
 ## 2. Preparation
 
@@ -57,7 +57,13 @@ python main.py --advance_time <time when pre-booked orders start to appear in ad
 
 
 
-## 4. Citation
+## 4. Parameters
+
+The trained parameters, process log files, and evaluation results are located in the `parameters` folder.
+
+
+
+## 5. Citation
 
 ```
 
