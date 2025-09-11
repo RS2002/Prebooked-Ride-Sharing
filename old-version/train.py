@@ -108,7 +108,7 @@ def main():
             prebook_end = args.prebook_end
             advance_time = args.advance_time
 
-        worker.reset(train=True, pre_rate=pre_sample, pooling_rate=p_pooling, advance_time =advance_time)
+        worker.reset(train=True, pre_rate=pre_sample, pooling_rate=p_pooling)
         platform.reset(discount_factor=args.gamma)
         # day = random.randint(8,12)
         day = args.day

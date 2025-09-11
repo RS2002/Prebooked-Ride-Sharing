@@ -38,8 +38,6 @@ def norm(order_state, worker_state, history_order_state, lat_min = 40.6887842155
     worker_state[:, 6] = worker_state[:, 6] / simulation_time
     worker_state[:, 9] = worker_state[:, 9] / simulation_time
     worker_state[:, 11] = worker_state[:, 11] / simulation_time
-    worker_state[:, 14] = worker_state[:, 14] / simulation_time
-
     order_state[:,4] = order_state[:,4] / simulation_time
     history_order_state[:,:,2] = history_order_state[:,:,2] / simulation_time
     history_order_state[:,:,3] = history_order_state[:,:,3] / simulation_time
@@ -170,8 +168,8 @@ class Worker():
         self.coordinate_lookup_lon = np.array(self.zone_dic["centroid_lon"])
         self.zone_map = np.array(self.zone_dic["map"])
 
-        self.Q_training = Q_Net(state_size=16, history_order_size=5, current_order_size=7, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
-        self.Q_target = Q_Net(state_size=16, history_order_size=5, current_order_size=7, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_training = Q_Net(state_size=14, history_order_size=5, current_order_size=7, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
+        self.Q_target = Q_Net(state_size=14, history_order_size=5, current_order_size=7, hidden_dim=64, head=1, bi_direction=bi_direction, dropout=dropout).to(device)
 
         self.load(model_path,self.device)
         for param in self.Q_target.parameters():
@@ -199,7 +197,7 @@ class Worker():
         for target_param, train_param in zip(self.Q_target.parameters(), self.Q_training.parameters()):
             target_param.data.copy_(tau * train_param.data + (1.0 - tau) * target_param.data)
 
-    def reset(self, capacity = 3, pre_rate = 0, pooling_rate = 0, advance_time = 30, train=True):
+    def reset(self, capacity = 3, pre_rate = 0, pooling_rate = 0, train=True):
         if train:
             self.Q_training.train()
             torch.set_grad_enabled(True)
@@ -209,7 +207,6 @@ class Worker():
         self.is_train = train
         self.pre_rate = pre_rate
         self.pooling_rate = pooling_rate
-        self.advance_time = advance_time
 
         '''
         observation space
@@ -221,14 +218,11 @@ class Worker():
         11: current time
         12: pre-booked rate
         13: pooling rate
-        14: advance time
-        15: phase
         '''
-        self.observe_space = np.zeros([self.num, 16])
+        self.observe_space = np.zeros([self.num, 14])
         self.observe_space[:,8] = capacity
         self.observe_space[:,12] = self.pre_rate
         self.observe_space[:,13] = self.pooling_rate
-        self.observe_space[:,14] = self.advance_time
 
         '''
         current orders
@@ -259,12 +253,6 @@ class Worker():
         self.start_flag = np.zeros([self.num])
 
     def observe(self, prebook, order, current_time, order_future = None, exploration_rate=0):
-        if prebook:
-            self.observe_space[:,15] = 0
-        else:
-            self.observe_space[:,15] = 1
-
-
         # 0. process order state
         pid = np.array(order['PULocationID'],dtype=int)
         did = np.array(order['DOLocationID'],dtype=int)
@@ -331,7 +319,7 @@ class Worker():
             q_value[self.observe_space[:, 10] == 1] = -INF
             # 4. avoid pooling conflict
             for j in range(q_value.shape[1]):
-                if order[j, 5] == 1:
+                if order[j, -2] == 1:
                     q_value[self.current_order_num != 0, j] = -INF
 
         return q_value.cpu().detach().numpy(), order

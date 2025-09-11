@@ -28,7 +28,7 @@ docker run -t -i -p 6000:6000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backen
 
 ## 3. How to Run
 
-### 3.0 Our Setting
+### 3.1 Our Setting
 
 The simulation parameters in our paper are as follows:
 
@@ -37,14 +37,16 @@ The simulation parameters in our paper are as follows:
 
 You can modify these settings by editing the `Order_Env.py` file. Additionally, the order distribution and appearance times can be adjusted using parameters in argparse as shown below.
 
-### 3.1 Train
+
+
+### 3.2 Train
 
 #### 3.1.1 Train for a General Strategy
 
 In this mode, the proportions of pre-booked orders, pooling orders, and the appearance times of pre-booked orders are randomized in each episode. This approach helps develop a robust strategy with minimal performance sacrifice.
 
 ```shell
-python main.py --bi_direction --rand_rate --rand_appear
+python train.py --bi_direction --rand_rate --rand_appear
 ```
 
 #### 3.1.2 Train for a Specific Strategy
@@ -52,14 +54,24 @@ python main.py --bi_direction --rand_rate --rand_appear
 To achieve optimal performance for specific conditions, you can train the model using the following command:
 
 ```shell
-python main.py --advance_time <time when pre-booked orders start to appear in adavance> --pooling_rate <proportion of customers choosing pooling> --prebooked_rate <proportion of pre-booked orders in total orders>
+python train.py --advance_time <time when pre-booked orders start to appear in adavance> --pooling_rate <proportion of customers choosing pooling> --prebooked_rate <proportion of pre-booked orders in total orders>
+```
+
+It would be beneficial to first pre-train a general strategy and then fine-tune the model for specific scenarios. To do this, you should load the pre-trained model parameters using `--model_path <pre-trained model path>`.
+
+
+
+### 3.3 Evaluate
+
+```shell
+python eval.py --bi_direction --model_path <trained model path> --prebooked_rate <a list of your evaluation scenarios> --pooling_rate <a list of your evaluation scenarios> --advance_time <a list of your evaluation scenarios>
 ```
 
 
 
 ## 4. Parameters
 
-The trained parameters, process log files, and evaluation results are located in the `parameters` folder.
+The trained parameters is provided in the `parameters` folder.
 
 
 
