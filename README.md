@@ -1,6 +1,10 @@
-# Mixture of On-demand and Pre-booked Ride Sharing System
+# Mixture of On-Demand and Pre-Booked Ride Sharing System
 
-**Article:** Zijian Zhao, Jing Gao*, Sen Li, "Ride-Hailing Vehicle Dispatch with a Mixture of On-Demand and Pre-Booked Requests: A Multi-Agent Reinforcement Learning Approach" (under review)
+**Article:** 
+
+Journal Version: Zijian Zhao, Jing Gao*, Sen Li, "Real-Time Order Assignment for Ride-Sharing Platforms with a Mixture of Pre-booked and On-Demand Requests" (under review)
+
+Conference Version: Zijian Zhao, Jing Gao*, Sen Li, "Ride-Hailing Order Dispatching with A Mixture of On-Demand and Pre-Booked Requests via Reinforcement Learning", 2026 COTA International Conference of Transportation Professionals (CICTP 2026)
 
 
 
@@ -29,15 +33,6 @@ Before executing the code, you must first start the Docker container for [OSRM](
 ```shell
 docker run -t -i -p 6000:6000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/us-northeast-latest.osrm -p 6000
 ```
-
-### 2.3 Our Setting
-
-The simulation parameters in our paper are as follows:
-
-1. **Total Simulation Time:** 60 minutes
-2. **Order Distribution:** Pre-booked orders appear only in the last 30 minutes, although platforms can access their information in advance
-
-You can modify these settings by editing the `Order_Env.py` file. Additionally, the order distribution and appearance times can be adjusted using parameters in argparse as shown below.
 
 
 
@@ -71,13 +66,7 @@ python eval.py --bi_direction --model_path <trained model path> --prebooked_rate
 
 
 
-## 4. Parameters
-
-The trained parameters is provided in the `parameters` folder.
-
-
-
-## 5. Citation
+## 4. Citation
 
 ```
 

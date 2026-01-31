@@ -155,14 +155,25 @@ class Buffer():
 
         return worker_state, order_state, order_num, action, delta_t, reward, worker_state_next, order_state_next, order_num_next, action_next
 
+
+lat_min = 40.68878421555262
+lat_max = 40.875967791801536
+lon_min = -74.04528828347375
+lon_max = -73.91037864632285
+
+
 class Worker():
-    def __init__(self, buffer, lr=0.0001, gamma=0.99, max_step=60, num=1000, device=None, zone_table_path = "./data/Manhattan_dic.pkl", model_path = None, njobs = 12, bi_direction = True, dropout = 0.0):
+    def __init__(self, buffer, lr=0.0001, gamma=0.99, max_step=60, num=1000, device=None, zone_table_path = "./data/Manhattan_dic.pkl", model_path = None, njobs = 12, bi_direction = True, dropout = 0.0, rand_init = False, restrict = False, noise_type = 0):
         super().__init__()
         self.buffer = buffer
         self.gamma = gamma
         self.device = device
         self.max_step = max_step
         self.num = num
+
+        self.rand_init = rand_init
+        self.restrict = restrict
+        self.noise_type = noise_type
 
         with open(zone_table_path, 'rb') as f:
             self.zone_dic = pickle.load(f)
@@ -240,10 +251,14 @@ class Worker():
         self.current_orders = np.zeros([self.num, capacity, 5])
         self.current_order_num = np.zeros([self.num])
 
-        # allocate a initial location randomly from valid zone
-        random_integers = np.random.randint(0, len(self.coordinate_lookup_lat), size=(self.num))
-        self.observe_space[:, 0] = self.coordinate_lookup_lat[random_integers]
-        self.observe_space[:, 1] = self.coordinate_lookup_lon[random_integers]
+        if self.rand_init:
+            self.observe_space[:, 0] = np.random.random([self.num]) * (lat_max - lat_min) + lat_min
+            self.observe_space[:, 1] = np.random.random([self.num]) * (lon_max - lon_min) + lon_min
+        else:
+            # allocate a initial location randomly from valid zone
+            random_integers = np.random.randint(0, len(self.coordinate_lookup_lat), size=(self.num))
+            self.observe_space[:, 0] = self.coordinate_lookup_lat[random_integers]
+            self.observe_space[:, 1] = self.coordinate_lookup_lon[random_integers]
 
         # some records for simulation
         self.travel_route = [[] for _ in range(self.num)]
@@ -323,8 +338,17 @@ class Worker():
         x1, x2, x3 = torch.tensor(x1).to(self.device), torch.tensor(x2).to(self.device), torch.tensor(x3).to(self.device)
         q_value = self.Q_training(x1, x2, x3, torch.from_numpy(self.current_order_num).to(self.device))
         # 2. epsilon-greedy explore
-        exploration_matrix = torch.rand_like(q_value)
-        q_value[exploration_matrix < exploration_rate] = INF
+        if self.noise_type == 0:
+            exploration_matrix = torch.rand_like(q_value)
+            q_value[exploration_matrix < exploration_rate] = INF
+        else:
+            if not prebook:
+                q_mean = torch.mean(q_value[self.observe_space[:, 10] == 0])
+            else:
+                q_mean = torch.mean(q_value)
+            scale = 2 * q_mean * exploration_rate
+            noise = torch.randn_like(q_value) * scale
+            q_value = q_value + noise
 
         if not prebook:
             # 3. delete the Q value of not available workers
@@ -333,6 +357,12 @@ class Worker():
             for j in range(q_value.shape[1]):
                 if order[j, 5] == 1:
                     q_value[self.current_order_num != 0, j] = -INF
+            # 5. add distance restriction
+            if self.restrict:
+                worker_pos = self.observe_space[:, :2]
+                order_pos = order[:, :2]
+                dis = np.sqrt(np.sum((worker_pos[:, np.newaxis, :] - order_pos[np.newaxis, :, :]) ** 2, axis=-1))
+                q_value[dis > 0.03] -= INF / 2
 
         return q_value.cpu().detach().numpy(), order
 
