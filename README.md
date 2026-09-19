@@ -2,9 +2,9 @@
 
 **Article:** 
 
-Journal Version: Zijian Zhao, Jing Gao*, Sen Li, "Real-Time Order Assignment for Ride-Sharing Platforms with a Mixture of Pre-booked and On-Demand Requests" (under review)
+Journal Version: Zijian Zhao, Jing Gao*, Sen Li, "[Real-time order assignment for ride-sharing platforms with a mixture of pre-booked and on-demand requests](https://www.sciencedirect.com/science/article/pii/S0968090X2600522X?via%3Dihub)", Transportation Research Part C: Emerging Technologies, 2026
 
-Conference Version: Zijian Zhao, Jing Gao*, Sen Li, "Ride-Hailing Order Dispatching with A Mixture of On-Demand and Pre-Booked Requests via Reinforcement Learning", 2026 COTA International Conference of Transportation Professionals (CICTP 2026)
+Conference Version: Zijian Zhao, Jing Gao*, Sen Li, "Ride-Hailing Order Dispatching with A Mixture of On-Demand and Pre-Booked Requests via Reinforcement Learning", 2026 COTA International Conference of Transportation Professionals (CICTP)
 
 
 
@@ -69,6 +69,16 @@ python eval.py --bi_direction --model_path <trained model path> --prebooked_rate
 ## 4. Citation
 
 ```
-
+@article{ZHAO2027106036,
+title = {Real-time order assignment for ride-sharing platforms with a mixture of pre-booked and on-demand requests},
+journal = {Transportation Research Part C: Emerging Technologies},
+volume = {194},
+pages = {106036},
+year = {2027},
+issn = {0968-090X},
+doi = {https://doi.org/10.1016/j.trc.2026.106036},
+url = {https://www.sciencedirect.com/science/article/pii/S0968090X2600522X},
+author = {Zijian Zhao and Jing Gao and Sen Li},
+}
 ```
 
